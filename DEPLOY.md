@@ -162,14 +162,19 @@ sudo systemctl enable --now chtostuchit && sudo systemctl status chtostuchit
 
 </details>
 
-Ставим конфиг сайта:
+Ставим конфиг сайта. Он **только HTTP**, и это намеренно: блоки TLS дописывает
+certbot. Объявить `listen 443 ssl` заранее нельзя — nginx откажется стартовать
+без сертификатов, а получить их можно только через живой nginx.
+
+Перед копированием сверьте `proxy_pass` в файле с портом, на котором реально
+слушает контейнер.
 
 ```bash
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/chtostuchit
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/chtostuchit && sudo ln -sf /etc/nginx/sites-available/chtostuchit /etc/nginx/sites-enabled/
 ```
 
 ```bash
-sudo ln -sf /etc/nginx/sites-available/chtostuchit /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Выпускаем сертификаты на все четыре имени. Кириллический домен указывается
@@ -179,7 +184,21 @@ sudo ln -sf /etc/nginx/sites-available/chtostuchit /etc/nginx/sites-enabled/
 sudo certbot --nginx -d chtostuchit.ru -d www.chtostuchit.ru -d xn--h1aljccbf1af.xn--p1ai -d www.xn--h1aljccbf1af.xn--p1ai
 ```
 
-Проверяем и перезагружаем:
+Certbot сам добавит `listen 443 ssl`, сертификаты и редирект с HTTP, сохранив
+`location` и таймауты. На этом сайт уже работает на обоих доменах.
+
+## 5В. Канонический домен
+
+Шаг необязательный, но без него поисковик видит две копии одного сайта.
+Подключать **только после** выпуска сертификатов:
+
+```bash
+sudo cp deploy/nginx-canonical.conf /etc/nginx/sites-available/chtostuchit-canonical && sudo ln -sf /etc/nginx/sites-available/chtostuchit-canonical /etc/nginx/sites-enabled/
+```
+
+Затем уберите три неканонических имени из `server_name` в основном конфиге,
+оставив только `chtostuchit.ru`, — иначе два блока претендуют на одни и те же
+имена, и nginx возьмёт первый подошедший.
 
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
@@ -343,6 +362,19 @@ docker compose --profile caddy down && docker compose up -d
 
 **`Permission denied` при записи корпуса.** Юнит работает от `www-data`, а
 каталог принадлежит `root`: `sudo chown -R www-data:www-data /var/www/chtostuchit`.
+
+**`unknown directive "http2"`.** nginx старше 1.25.1, где эта директива
+появилась отдельной строкой. В конфигах используется совместимый синтаксис
+`listen 443 ssl http2;` — если правили руками, верните его.
+
+**`no ssl_certificate is defined`.** Блок с `listen 443 ssl` подключён раньше,
+чем выпущены сертификаты. Уберите `nginx-canonical.conf` из `sites-enabled`,
+прогоните certbot, затем верните.
+
+**`port is already allocated` при старте контейнера.** Порт занят прошлым
+запуском или чужим сервисом. Посмотрите, кем: `sudo ss -tlnp | grep <порт>`.
+Если это остаток прежнего контейнера — `docker compose down`. Если чужой
+процесс — выберите другой порт в `.env` и не забудьте про `proxy_pass`.
 
 **504 на разборе механика, вердикт при этом приходит.** В nginx остались
 дефолтные 60 секунд. Разбор доходит до минуты, поэтому в конфиге стоит
