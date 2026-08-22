@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import shutil
@@ -26,8 +27,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from service import mechanic, vehicle_facts
+from service import label_mapper, mechanic, vehicle_facts
 from service.diagnose import Engine
+from service.memory_store import MemoryStore
 from service.storage import Corpus
 
 logging.basicConfig(
@@ -78,6 +80,9 @@ async def lifespan(app: FastAPI):
     t0 = time.perf_counter()
     _state["engine"] = Engine()
     _state["corpus"] = Corpus(CORPUS_DIR)
+    # Тот же смонтированный том, что уже переживает пересборку образа —
+    # никакой новой инфраструктуры, обычный файл SQLite.
+    _state["memory"] = MemoryStore(Path(CORPUS_DIR) / "memory.db")
     log.info("модели загружены за %.1f c", time.perf_counter() - t0)
     _warmup(_state["engine"])
     if not mechanic.api_key():
@@ -184,20 +189,37 @@ async def analyse(
     # Разбор механиком доступен, только если есть на чём рассуждать.
     payload["mechanic_pending"] = bool(mechanic.api_key()) and report.status != "uncertain"
 
-    corpus.save_record(
-        rec_id, vehicle=vehicle, symptom=symptom, report=payload,
-        consent_training=consent_training.lower() in ("true", "1", "on", "yes"),
-    )
+    consent = consent_training.lower() in ("true", "1", "on", "yes")
+    corpus.save_record(rec_id, vehicle=vehicle, symptom=symptom, report=payload,
+                       consent_training=consent)
     # Разбор идёт вторым запросом: акустика готова за пару секунд, а LLM думает
     # около двенадцати. Держать готовый вердикт ради неё — терять пользователя.
-    _pending[rec_id] = {"report": payload, "vehicle": vehicle,
-                        "symptom": symptom, "messages": [], "rounds": 0}
+    # consent живёт здесь же: он понадобится позже, если владелец подтвердит
+    # диагноз через /api/feedback и запись пойдёт в обучающий корпус.
+    _pending[rec_id] = {"report": payload, "vehicle": vehicle, "symptom": symptom,
+                        "consent_training": consent, "messages": [], "rounds": 0}
     while len(_pending) > PENDING_MAX:
         _pending.pop(next(iter(_pending)))
 
     log.info("анализ %s: %s / %s за %d мс", rec_id, payload["status"],
              payload.get("zone", "-"), acoustic_ms)
     return JSONResponse(payload)
+
+
+def _run_first_pass(entry: dict, memory: MemoryStore):
+    """Справка по машине + первый разбор — синхронный блок, целиком идущий в
+    отдельный поток (см. вызов ниже). Историю диалога кладём в entry здесь же:
+    после to_thread у вызывающей стороны нет доступа к локальному messages."""
+    facts = vehicle_facts.lookup_persistent(entry["vehicle"], memory)
+    entry["facts"] = facts
+    messages = mechanic.build_messages(entry["report"], entry["vehicle"],
+                                       entry["symptom"], facts)
+    opinion, raw = mechanic._call(messages)
+    if opinion.ok and raw:
+        # История нужна, чтобы уточнения продолжали тот же разговор, а не
+        # начинали новый: механик должен помнить, что уже предполагал.
+        entry["messages"] = messages + [{"role": "assistant", "content": raw}]
+    return opinion
 
 
 @app.post("/api/mechanic")
@@ -209,19 +231,12 @@ async def mechanic_opinion(rec_id: str = Form(...)):
         raise HTTPException(404, "Анализ не найден или устарел. Запишите заново.")
 
     t0 = time.perf_counter()
-    # Справка по машине тянется один раз и живёт в кэше по марке: она же
-    # понадобится на уточнениях, а платить за неё в каждом раунде незачем.
-    facts = vehicle_facts.lookup(entry["vehicle"])
-    entry["facts"] = facts
-    messages = mechanic.build_messages(entry["report"], entry["vehicle"],
-                                       entry["symptom"], facts)
-    opinion, raw = mechanic._call(messages)
+    # Справка (Sonar Pro) и сам разбор (AIMLAPI) — блокирующие HTTP-вызовы на
+    # десятки секунд каждый. Раньше они выполнялись прямо в async-хендлере и
+    # держали event loop: любой другой запрос, включая /api/health, ждал бы
+    # следом. asyncio.to_thread выносит всю синхронную цепочку в поток.
+    opinion = await asyncio.to_thread(_run_first_pass, entry, _state["memory"])
     took = int((time.perf_counter() - t0) * 1000)
-
-    if opinion.ok and raw:
-        # История нужна, чтобы уточнения продолжали тот же разговор, а не
-        # начинали новый: механик должен помнить, что уже предполагал.
-        entry["messages"] = messages + [{"role": "assistant", "content": raw}]
 
     body = opinion.to_dict()
     body["took_ms"] = took
@@ -246,7 +261,7 @@ async def mechanic_refine(rec_id: str = Form(...), answers: str = Form(...)):
         raise HTTPException(429, "Достигнут предел уточнений для этой записи.")
 
     t0 = time.perf_counter()
-    opinion, convo = mechanic.refine(entry["messages"], text)
+    opinion, convo = await asyncio.to_thread(mechanic.refine, entry["messages"], text)
     took = int((time.perf_counter() - t0) * 1000)
 
     if opinion.ok:
@@ -272,28 +287,66 @@ async def prefetch(background: BackgroundTasks, brand: str = Form(""),
     Справка занимает около 15 секунд и нужна только к моменту разбора. Владелец
     к этому времени успевает пройти два экрана и записать 15 секунд аудио, так
     что запрос укладывается в это окно и перестаёт стоить времени. Результат
-    ложится в кэш по марке, откуда его и возьмёт разбор.
+    ложится в постоянный кэш (переживает редеплой), откуда его возьмёт разбор.
     """
     if not brand.strip():
         return {"ok": False}
-    background.add_task(vehicle_facts.lookup,
-                        {"brand": brand.strip()[:40], "model": model.strip()[:40],
-                         "year": year.strip()[:4]})
+    vehicle = {"brand": brand.strip()[:40], "model": model.strip()[:40],
+              "year": year.strip()[:4]}
+    background.add_task(vehicle_facts.lookup_persistent, vehicle, _state["memory"])
     return {"ok": True}
 
 
+def _classify_correction(memory: MemoryStore, correction_id: int, owner_text: str,
+                         symptom: str, ai_status: str, ai_top_part: str) -> None:
+    """Разметить свободный текст владельца одним из 21 канонического класса —
+    фоном, после того как ответ '{"ok": true}' уже ушёл пользователю."""
+    label, confidence = label_mapper.classify(
+        owner_text, symptom=symptom, ai_status=ai_status, ai_top_part=ai_top_part)
+    memory.set_mapped_label(correction_id, label, confidence)
+    log.info("разметка исправления #%s: %s (%s)", correction_id, label or "—", confidence)
+
+
 @app.post("/api/feedback")
-async def feedback(rec_id: str = Form(...), actual: str = Form(""),
-                   comment: str = Form("")):
-    """Что реально нашли в сервисе. Замыкает цикл сбора данных."""
-    _state["corpus"].save_feedback(
-        rec_id.strip()[:32], actual=actual.strip()[:200], comment=comment.strip()[:1000])
+async def feedback(background: BackgroundTasks, rec_id: str = Form(...),
+                   actual: str = Form(""), comment: str = Form("")):
+    """Что реально нашли в сервисе. Замыкает цикл сбора данных двояко: как и
+    раньше пишет в corpus/feedback.jsonl, и — если владелец назвал причину и
+    исходно согласился на обучение — заводит строку в таблице corrections,
+    которую следующим шагом разметит фоновый классификатор и подготовит к
+    `cardiag ingest --cause <класс>` (service/export_training_set.py)."""
+    key = rec_id.strip()[:32]
+    actual = actual.strip()[:200]
+    comment = comment.strip()[:1000]
+
+    _state["corpus"].save_feedback(key, actual=actual, comment=comment)
+
+    entry = _pending.get(key)
+    if actual and entry is not None and entry.get("consent_training"):
+        report = entry["report"]
+        ai_top_part = (report.get("versions") or [{}])[0].get("part", "")
+        correction_id = _state["memory"].save_correction(
+            rec_id=key, vehicle_key=vehicle_facts.vehicle_key(entry["vehicle"]),
+            vehicle=entry["vehicle"], symptom=entry["symptom"],
+            ai_status=report.get("status", ""), ai_zone=report.get("zone", ""),
+            ai_top_part=ai_top_part, owner_text=actual, comment=comment,
+            audio_path=str(_state["corpus"].audio_path(key)),
+            consent_training=True,
+        )
+        background.add_task(_classify_correction, _state["memory"], correction_id,
+                            actual, entry["symptom"], report.get("status", ""),
+                            ai_top_part)
+    elif actual and entry is None:
+        log.info("фидбек %s без контекста в _pending — в обучающий корпус не пойдёт", key)
+
     return {"ok": True}
 
 
 @app.get("/api/stats")
 async def stats():
-    return _state["corpus"].stats()
+    s = _state["corpus"].stats()
+    s["memory"] = _state["memory"].stats()
+    return s
 
 
 @app.get("/api/health")

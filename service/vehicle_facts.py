@@ -64,6 +64,12 @@ def _key(vehicle: dict) -> str:
                     for k in ("brand", "model", "year")).strip()
 
 
+def vehicle_key(vehicle: dict) -> str:
+    """Публичный алиас _key — для service/app.py и memory_store.py, чтобы не
+    тянуть приватную функцию через границу модуля."""
+    return _key(vehicle)
+
+
 def _vehicle_line(vehicle: dict) -> str:
     bits = [vehicle.get("brand", ""), vehicle.get("model", ""), vehicle.get("year", "")]
     return " ".join(b for b in bits if b).strip()
@@ -146,6 +152,35 @@ def lookup(vehicle: dict) -> dict:
 
     log.info("справочник: %s -> привод ГРМ %s, уверенность %s",
              key, facts.get("timing_drive", "?"), facts.get("confidence", "?"))
+    return facts
+
+
+def lookup_persistent(vehicle: dict, memory) -> dict:
+    """lookup() с диском в роли второго уровня кэша, переживающего редеплой.
+
+    Три уровня: process-local словарь (микросекунды, живёт до рестарта) ->
+    SQLite в memory_store (диск, переживает передеплой) -> Sonar Pro (сеть,
+    секунды, деньги). memory=None откатывает на чистый lookup() — так тесты и
+    вызовы без сконфигурированного хранилища не ломаются.
+    """
+    key = _key(vehicle)
+    if not key:
+        return {}
+
+    with _lock:
+        if key in _cache:
+            return _cache[key]
+
+    if memory is not None:
+        cached = memory.get_facts(key)
+        if cached:
+            with _lock:
+                _cache[key] = cached
+            return cached
+
+    facts = lookup(vehicle)
+    if facts and memory is not None:
+        memory.save_facts(key, vehicle, facts)
     return facts
 
 
