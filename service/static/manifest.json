@@ -1,0 +1,14 @@
+{
+  "name": "Что стучит — диагностика по звуку",
+  "short_name": "Что стучит",
+  "description": "Запишите звук автомобиля и узнайте, где искать причину.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1211",
+  "theme_color": "#0e1211",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

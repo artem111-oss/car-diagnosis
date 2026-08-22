@@ -24,10 +24,10 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from service import label_mapper, mechanic, vehicle_facts
+from service import label_mapper, mechanic, seo_pages, vehicle_facts
 from service.diagnose import Engine
 from service.memory_store import MemoryStore
 from service.storage import Corpus
@@ -143,6 +143,31 @@ def _to_wav(src: Path, dst: Path) -> None:
 @app.get("/")
 async def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/robots.txt")
+async def robots():
+    return PlainTextResponse(
+        "User-agent: *\nAllow: /\n\nSitemap: https://chtostuchit.ru/sitemap.xml\n")
+
+
+@app.get("/sitemap.xml")
+async def sitemap():
+    pages = ["/", "/statistika"] + list(seo_pages.PAGES)
+    urls = "".join(f"<url><loc>https://chtostuchit.ru{p}</loc></url>" for p in pages)
+    return Response(
+        f'<?xml version="1.0" encoding="UTF-8"?>'
+        f'<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9">{urls}</urlset>',
+        media_type="application/xml")
+
+
+@app.get("/statistika")
+async def statistika():
+    """Публичная страница честности: то, что /api/stats считает для оператора,
+    здесь видит любой посетитель — до подписки, до просьбы довериться."""
+    s = _state["corpus"].stats()
+    m = _state["memory"].stats()
+    return HTMLResponse(seo_pages.stats_page(s, m))
 
 
 @app.post("/api/analyse")
@@ -364,6 +389,16 @@ async def health():
         "model": mechanic.MODEL,
         "ffmpeg": bool(shutil.which("ffmpeg")),
     }
+
+
+@app.get("/{slug}", response_class=HTMLResponse, include_in_schema=False)
+async def seo_page(slug: str):
+    """Симптомные SEO-страницы. Регистрируется последним: однословный путь
+    иначе перехватил бы будущие /api/* или другие короткие маршруты."""
+    page = seo_pages.PAGES.get(f"/{slug}")
+    if page is None:
+        raise HTTPException(404)
+    return HTMLResponse(page)
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

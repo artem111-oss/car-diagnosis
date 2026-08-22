@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0e1211">
 <meta name="description" content="Запишите звук автомобиля — акустическая модель определит зону неисправности, а ИИ-механик назовёт вероятные узлы и цену ремонта.">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/static/manifest.json">
 <!-- Доменов два: chtostuchit.ru и чтостучит.рф. Второй отдаёт 301, но canonical
      страхует на случай, если кто-то сошлётся на кириллический адрес напрямую. -->
 <link rel="canonical" href="https://chtostuchit.ru/">
@@ -15,6 +16,41 @@
 <meta property="og:locale" content="ru_RU">
 <meta property="og:type" content="website">
 <title>Что стучит — диагностика автомобиля по звуку</title>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": "Что стучит",
+  "description": "Бесплатная диагностика автомобиля по звуку через браузер: акустическая модель определяет зону неисправности, ИИ-механик называет вероятные узлы.",
+  "url": "https://chtostuchit.ru/",
+  "provider": { "@type": "Organization", "name": "Что стучит" },
+  "areaServed": "RU",
+  "isAccessibleForFree": true
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Насколько точно сервис определяет неисправность по звуку?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Зону (двигатель, подвеска, тормоза, трансмиссия) модель определяет надёжно: правильная попадает в тройку версий примерно в 75% случаев. Конкретную деталь по одному звуку определить труднее, поэтому её называет ИИ-механик с учётом марки, пробега и симптома. Сервис не обещает 98% точности и прямо говорит «не берусь судить», когда данных мало." }
+    },
+    {
+      "@type": "Question",
+      "name": "Нужно ли устанавливать приложение или OBD2-адаптер?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Нет. Запись идёт прямо в браузере с телефона, никаких адаптеров или установки не требуется." }
+    },
+    {
+      "@type": "Question",
+      "name": "Сервис бесплатный?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Да, диагностика по звуку и разбор ИИ-механика бесплатны." }
+    }
+  ]
+}
+</script>
 <style>
   /* Тема одна — тёмная. Сервисом пользуются в гараже, на парковке, вечером:
      светлый экран там слепит, а тёмный читается. color-scheme сообщает об этом
@@ -815,6 +851,10 @@
         <p class="note">${esc(d.disclaimer)} Полезного звука: ${esc(d.clean_seconds)} сек.</p>
         <details><summary>Технические данные</summary><pre>${esc(JSON.stringify(d.debug, null, 1))}</pre></details>
       </div>
+      <button class="btn sec" id="share-btn" style="margin-bottom:14px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:7px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+        Отправить другу со стуком
+      </button>
       <div id="mech-slot">${mechBlock}</div>
       <div class="card">
         <h2>Были в сервисе?</h2>
@@ -827,6 +867,26 @@
       <button class="btn sec" onclick="location.reload()">Проверить ещё раз</button>`;
 
     show("step-result");
+
+    // Главный бесплатный канал роста — сарафанное радио. Делимся не ссылкой
+    // на голый сайт, а конкретным результатом: у друга та же проблема,
+    // готовый пример убеждает лучше, чем объяснение с нуля.
+    $("share-btn").addEventListener("click", async () => {
+      const text = `${d.headline}. Я проверил на chtostuchit.ru — бесплатно определяет, что стучит в машине, по записи звука. Проверь свою: `;
+      const url = location.origin;
+      try {
+        if (navigator.share) {
+          await navigator.share({ text, url });
+        } else {
+          await navigator.clipboard.writeText(text + url);
+          const btn = $("share-btn");
+          const was = btn.innerHTML;
+          btn.textContent = "Ссылка скопирована";
+          setTimeout(() => { btn.innerHTML = was; }, 2000);
+        }
+      } catch {} // отмена шаринга пользователем — не ошибка
+    });
+
     $("fbsend").addEventListener("click", async () => {
       const fd = new FormData();
       fd.append("rec_id", d.id);
@@ -836,6 +896,10 @@
       $("fbsend").textContent = "Спасибо";
       $("fbsend").disabled = true;
     });
+  }
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("/static/sw.js"));
   }
 })();
 </script>
