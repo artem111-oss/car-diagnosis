@@ -4,7 +4,10 @@
 # кроме localhost без защищённого соединения, поэтому без сертификата главная
 # функция сервиса просто не работает.
 #
-#   cp service/.env.example .env   # заполнить AIMLAPI_KEY и DOMAIN
+# Домены прописаны прямо в Caddyfile: их два, и один редиректит на другой,
+# так что одной переменной это не выражается.
+#
+#   cp service/.env.example .env   # заполнить AIMLAPI_KEY
 #   docker compose up -d
 
 services:
@@ -32,8 +35,6 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN:?укажите DOMAIN в .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

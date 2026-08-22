@@ -13,20 +13,36 @@
 
 GPU не нужен: анализ занимает 0.23 секунды на процессоре.
 
-## 1. Домен
+## 1. Домены
 
-В панели регистратора добавьте A-запись:
+Их два: `chtostuchit.ru` и `чтостучит.рф`.
+
+**Канонический — `chtostuchit.ru`.** Причина не во вкусе: кириллический адрес
+в конфигах, сертификатах и заголовках существует только как punycode
+`xn--h1aljccbf1af.xn--p1ai`, и при копировании в мессенджеры, почту и старый
+софт он нередко ломается. Латиница работает везде. Кириллический домен остаётся
+живым и отдаёт постоянный редирект на основной — так он приводит людей, но не
+плодит для поиска две копии одного сайта.
+
+В панели **каждого** регистратора добавьте по две A-записи на IP сервера:
 
 ```
 @    A    <IP сервера>    300
 www  A    <IP сервера>    300
 ```
 
-Проверьте, что запись разошлась, — без этого Caddy не получит сертификат:
+Кириллический домен вводится в панели как есть, `чтостучит.рф`: в punycode его
+переводит сам регистратор.
+
+Проверьте, что записи разошлись. Без этого Caddy не выпустит сертификаты и
+будет циклически пытаться заново:
 
 ```bash
-dig +short chtostuchit.ru
+dig +short chtostuchit.ru www.chtostuchit.ru xn--h1aljccbf1af.xn--p1ai www.xn--h1aljccbf1af.xn--p1ai
 ```
+
+Все четыре строки должны показать один и тот же IP. Если пусто — DNS ещё не
+обновился, подождите и повторите; выкатывать раньше смысла нет.
 
 ## 2. Сервер
 
@@ -49,35 +65,43 @@ ufw allow 22,80,443/tcp && ufw --force enable
 ## 3. Код
 
 ```bash
-git clone -b feat/ru-service https://github.com/artem111-oss/car-diagnosis.git /opt/chtostuchit
+git clone -b feat/ru-service https://github.com/artem111-oss/car-diagnosis.git /var/www/chtostuchit
+```
+
+Если каталог уже занят прежней версией, обновите её на месте:
+
+```bash
+cd /var/www/chtostuchit && git fetch origin && git checkout feat/ru-service && git pull
 ```
 
 ## 4. Настройки
 
 ```bash
-cp /opt/chtostuchit/service/.env.example /opt/chtostuchit/.env
+cp /var/www/chtostuchit/service/.env.example /var/www/chtostuchit/.env
 ```
 
-Откройте `/opt/chtostuchit/.env` и заполните:
+Откройте `/var/www/chtostuchit/.env` и заполните:
 
 ```
 AIMLAPI_KEY=<ваш ключ>
 AIMLAPI_MODEL=anthropic/claude-haiku-latest
-DOMAIN=chtostuchit.ru
 RATE_LIMIT_PER_HOUR=20
 CORPUS_DIR=/data/corpus
 ```
 
-Закройте файл от посторонних:
+Домены здесь не указываются — они прописаны в `Caddyfile`, потому что их два и
+один редиректит на другой.
+
+Закройте файл от посторонних: в нём платёжный ключ.
 
 ```bash
-chmod 600 /opt/chtostuchit/.env
+chmod 600 /var/www/chtostuchit/.env
 ```
 
 ## 5. Запуск
 
 ```bash
-cd /opt/chtostuchit && docker compose up -d --build
+cd /var/www/chtostuchit && docker compose up -d --build
 ```
 
 Сборка тянет torch и запекает CLAP в образ — это те самые 30 минут. Зато
@@ -93,6 +117,8 @@ docker compose logs -f app
 
 ## 6. Проверка
 
+Сервис жив:
+
 ```bash
 curl -s https://chtostuchit.ru/api/health
 ```
@@ -106,14 +132,40 @@ curl -s https://chtostuchit.ru/api/health
 `mechanic:false` означает, что ключ не подхватился: проверьте `.env` и
 перезапустите `docker compose up -d`.
 
+Оба домена и все редиректы:
+
+```bash
+for h in chtostuchit.ru www.chtostuchit.ru xn--h1aljccbf1af.xn--p1ai www.xn--h1aljccbf1af.xn--p1ai; do echo -n "$h -> "; curl -sI "https://$h" | head -1; done
+```
+
+Канонический должен отвечать `200`, остальные три — `301`. Сертификаты Caddy
+выпускает на все четыре имени сам, но не мгновенно: первые запросы после
+запуска могут упасть, пока идёт выпуск. Смотрите `docker compose logs caddy`.
+
 Дальше откройте сайт с телефона и запишите звук. **Проверять надо именно с
 телефона по HTTPS**: браузер не даёт доступ к микрофону на незащищённом
 соединении, и это единственный способ убедиться, что главная функция работает.
 
+## Если сервис уже запущен без Docker
+
+Когда uvicorn работает на хосте напрямую (systemd или запуск руками), Caddy
+ставится отдельно, а в `Caddyfile` меняется одна строка:
+
+```
+reverse_proxy 127.0.0.1:8080
+```
+
+вместо `reverse_proxy app:8080`. Остальной конфиг — домены, редиректы,
+заголовки, лимит тела запроса — работает как есть.
+
+```bash
+cp /var/www/chtostuchit/Caddyfile /etc/caddy/Caddyfile && systemctl reload caddy
+```
+
 ## Обновление
 
 ```bash
-cd /opt/chtostuchit && git pull && docker compose up -d --build
+cd /var/www/chtostuchit && git pull && docker compose up -d --build
 ```
 
 Корпус лежит в docker volume и пересборку переживает.
@@ -169,7 +221,16 @@ docker compose logs -f app | grep -E "анализ|разбор|уточнени
 ## Если что-то не работает
 
 **Сертификат не выдался.** Caddy не смог подтвердить домен: проверьте
-`dig +short chtostuchit.ru` и что порт 80 открыт.
+`dig +short chtostuchit.ru` и что порт 80 открыт. Для проверки Let's Encrypt
+ходит именно на 80, даже когда сайт работает по 443.
+
+**Кириллический домен не открывается, латинский работает.** Почти всегда DNS:
+`dig +short xn--h1aljccbf1af.xn--p1ai` должен вернуть тот же IP. Проверять надо
+punycode-имя, а не `чтостучит.рф` — часть утилит кириллицу не переводит.
+
+**Обрыв на `docker compose up` с жалобой на DOMAIN.** Осталась старая версия
+`docker-compose.yml`, где домен брался из `.env`. Обновите репозиторий: теперь
+домены живут в `Caddyfile`.
 
 **Микрофон не спрашивают.** Сайт открыт по HTTP. Браузер молча не даёт доступ
 без TLS — сообщение об этом сервис показывает сам.
