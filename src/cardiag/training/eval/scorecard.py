@@ -322,8 +322,9 @@ def run(out_md: Path | None = None) -> dict:
     repo_root = Path(__file__).resolve().parents[4]   # eval/training/cardiag/src/<root>
     out_md = out_md or (repo_root / "docs" / "SCORECARD.md")
     Path(out_md).parent.mkdir(parents=True, exist_ok=True)
-    Path(out_md).write_text("\n".join(lines) + "\n")
-    (Path(out_md).parent / "scorecard.json").write_text(json.dumps(report, indent=2))
+    Path(out_md).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (Path(out_md).parent / "scorecard.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8")
     print("\n".join(lines))
     print(f"\nwrote {out_md} + scorecard.json")
     return report

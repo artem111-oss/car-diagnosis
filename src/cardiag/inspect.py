@@ -177,7 +177,7 @@ def report(files, out_path="report.html", with_clap: bool = True) -> Path:
     cards = "".join(_clip_card(f, with_clap=with_clap) for f in files)
     html = _PAGE.replace("{{CARDS}}", cards).replace("{{N}}", str(len(files)))
     out = Path(out_path)
-    out.write_text(html)
+    out.write_text(html, encoding="utf-8")
     print(f"wrote inspection report for {len(files)} clip(s) -> {out.resolve()}")
     return out
 
@@ -219,7 +219,7 @@ def gallery(rows=None, out_path="gallery.html", limit: int = 120) -> Path:
     html = _GALLERY.replace("{{SECTIONS}}", "".join(sections)).replace(
         "{{N}}", str(len(rows)))
     out = Path(out_path)
-    out.write_text(html)
+    out.write_text(html, encoding="utf-8")
     print(f"wrote gallery of {len(rows)} clips ({len(groups)} sound-types) "
           f"-> {out.resolve()}")
     return out
