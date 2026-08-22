@@ -157,6 +157,11 @@ async def robots():
         "User-agent: *\nAllow: /\n\nSitemap: https://chtostuchit.ru/sitemap.xml\n")
 
 
+@app.get("/llms.txt")
+async def llms_txt():
+    return PlainTextResponse(seo_pages.llms_txt())
+
+
 @app.get("/sitemap.xml")
 async def sitemap():
     urls = "".join(f"<url><loc>https://chtostuchit.ru{p}</loc></url>" for p in seo_pages.all_paths())
