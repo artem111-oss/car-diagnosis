@@ -50,6 +50,15 @@
     backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
   }
   .top-in{max-width:640px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:10px;}
+  /* Настоящая ссылка, а не кнопка: работают средний клик, Ctrl+клик и
+     «открыть в новой вкладке». Обычный клик перехватывается скриптом и
+     возвращает на лендинг без перезагрузки, чтобы не потерять готовый разбор. */
+  .logo{
+    display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;
+    border-radius:9px;transition:opacity .14s;
+  }
+  .logo:hover{opacity:.75;}
+  .logo:focus-visible{outline:2px solid var(--amber);outline-offset:3px;}
   .mark{
     width:29px;height:29px;border-radius:8px;flex:none;
     background:linear-gradient(145deg,var(--amber),#c9600f);
@@ -301,6 +310,7 @@
 
 <div class="top">
   <div class="top-in">
+    <a class="logo" href="/" aria-label="На главную">
     <span class="mark" aria-hidden="true">
       <svg viewBox="0 0 32 32" fill="none">
         <g stroke="#1c0d02" stroke-linecap="round" stroke-width="2.4">
@@ -313,6 +323,7 @@
       </svg>
     </span>
     <span class="brand">Что стучит</span>
+    </a>
     <button class="cta-mini" data-go="wiz">Проверить</button>
   </div>
 </div>
@@ -475,6 +486,17 @@
     $("wiz").classList.remove("hidden");
     show("step-car");
   }));
+
+  // Клик по логотипу возвращает на лендинг. Мастер только прячется, поэтому
+  // результат остаётся в DOM: случайное нажатие не стирает разбор, к которому
+  // человек шёл полминуты.
+  document.querySelector(".logo").addEventListener("click", e => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    $("wiz").classList.add("hidden");
+    $("landing").classList.remove("hidden");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
   document.querySelectorAll("[data-next]").forEach(b =>
     b.addEventListener("click", () => {
       // Уходя с анкеты, просим сервер заранее собрать справку по машине.
