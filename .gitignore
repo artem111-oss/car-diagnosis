@@ -26,3 +26,7 @@ playwright-report/
 # generated artifacts
 .coverage
 docs/scorecard.json
+
+# Собранный сервисом корпус: пользовательское аудио и персональные данные.
+# Хранится вне репозитория (152-ФЗ), в проде переезжает в S3 и PostgreSQL.
+corpus/
