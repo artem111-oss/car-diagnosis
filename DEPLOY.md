@@ -98,14 +98,105 @@ CORPUS_DIR=/data/corpus
 chmod 600 /var/www/chtostuchit/.env
 ```
 
-## 5. Запуск
+## 5. Кто держит порты
+
+Сначала посмотрите, свободны ли 80 и 443:
+
+```bash
+sudo ss -tlnp | grep -E ':(80|443)\s'
+```
+
+Пусто — сервер чистый, идите по **сценарию Б**. Видно `nginx` или `apache` —
+**сценарий А**. Это частый случай, если код лежит в `/var/www`: путь как раз их
+конвенция.
+
+Публичный порт в обоих случаях остаётся 443. Менять его нельзя: адрес вида
+`https://chtostuchit.ru:8443` никто не набирает, а ссылки на него ломаются в
+мессенджерах. Настраиваемые порты — только внутренние.
+
+## 5А. Запуск за существующим nginx
+
+Приложение слушает только localhost — наружу с ним говорит nginx.
+
+**Сначала выберите свободный порт.** На сервере могут работать чужие сервисы:
+
+```bash
+sudo ss -tlnp | grep -E ':(8080|8090|8091)\s'
+```
+
+По умолчанию берётся **8090**. Если он занят, поставьте другой и поменяйте его
+в двух местах сразу — в `deploy/chtostuchit.service` и в `proxy_pass` внутри
+`deploy/nginx.conf`. Чужие процессы не трогайте: они к сервису отношения не
+имеют.
+
+Поднимаем контейнер. Caddy при этом **не** запускается: он спрятан за профиль,
+потому что 80 и 443 уже заняты nginx.
 
 ```bash
 cd /var/www/chtostuchit && docker compose up -d --build
 ```
 
-Сборка тянет torch и запекает CLAP в образ — это те самые 30 минут. Зато
-контейнер стартует мгновенно и не ходит в HuggingFace при каждом деплое.
+Проверяем, что порт слушается на localhost, а не наружу:
+
+```bash
+sudo ss -tlnp | grep 8090
+```
+
+Должен быть `127.0.0.1:8090`. Если адрес внешний — подтянулась старая версия
+`docker-compose.yml`, сделайте `git pull`.
+
+<details>
+<summary>Альтернатива без Docker — systemd</summary>
+
+```bash
+sudo cp deploy/chtostuchit.service /etc/systemd/system/ && sudo systemctl daemon-reload
+```
+
+```bash
+sudo chown -R www-data:www-data /var/www/chtostuchit
+```
+
+```bash
+sudo systemctl enable --now chtostuchit && sudo systemctl status chtostuchit
+```
+
+</details>
+
+Ставим конфиг сайта:
+
+```bash
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/chtostuchit
+```
+
+```bash
+sudo ln -sf /etc/nginx/sites-available/chtostuchit /etc/nginx/sites-enabled/
+```
+
+Выпускаем сертификаты на все четыре имени. Кириллический домен указывается
+только в punycode — certbot кириллицу не понимает:
+
+```bash
+sudo certbot --nginx -d chtostuchit.ru -d www.chtostuchit.ru -d xn--h1aljccbf1af.xn--p1ai -d www.xn--h1aljccbf1af.xn--p1ai
+```
+
+Проверяем и перезагружаем:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+## 5Б. Запуск на чистом сервере
+
+Caddy сам получит и продлит TLS:
+
+```bash
+cd /var/www/chtostuchit && docker compose --profile caddy up -d --build
+```
+
+## Сборка
+
+Первая сборка тянет torch и запекает CLAP в образ — это те самые 30 минут.
+Зато контейнер стартует мгновенно и не ходит в HuggingFace при каждом деплое.
 
 Следите за логом:
 
@@ -231,6 +322,31 @@ punycode-имя, а не `чтостучит.рф` — часть утилит �
 **Обрыв на `docker compose up` с жалобой на DOMAIN.** Осталась старая версия
 `docker-compose.yml`, где домен брался из `.env`. Обновите репозиторий: теперь
 домены живут в `Caddyfile`.
+
+**`failed to bind host port 0.0.0.0:80: address already in use`.** Порт занят
+другим веб-сервером — это сценарий А, а не Б. Остановите Caddy и работайте
+через существующий nginx:
+
+```bash
+docker compose --profile caddy down && docker compose up -d
+```
+
+**502 от nginx.** Приложение не отвечает на том порту, куда стучится
+`proxy_pass`. Сверьте порт в `deploy/nginx.conf` с тем, на котором слушает
+сервис, и проверьте, что он жив: `sudo systemctl status chtostuchit` либо
+`docker compose ps`.
+
+**Сервис слушает публичный IP.** Проверьте `sudo ss -tlnp | grep uvicorn`:
+адрес должен быть `127.0.0.1`, а не внешний. Если внешний — запущен старый
+процесс мимо systemd, снимите его через `sudo pkill -f 'uvicorn service.app'`
+и поднимите юнитом.
+
+**`Permission denied` при записи корпуса.** Юнит работает от `www-data`, а
+каталог принадлежит `root`: `sudo chown -R www-data:www-data /var/www/chtostuchit`.
+
+**504 на разборе механика, вердикт при этом приходит.** В nginx остались
+дефолтные 60 секунд. Разбор доходит до минуты, поэтому в конфиге стоит
+`proxy_read_timeout 180s` — проверьте, что он на месте.
 
 **Микрофон не спрашивают.** Сайт открыт по HTTP. Браузер молча не даёт доступ
 без TLS — сообщение об этом сервис показывает сам.
