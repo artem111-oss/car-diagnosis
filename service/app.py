@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from service import mechanic
+from service import mechanic, vehicle_facts
 from service.diagnose import Engine
 from service.storage import Corpus
 
@@ -209,8 +209,12 @@ async def mechanic_opinion(rec_id: str = Form(...)):
         raise HTTPException(404, "Анализ не найден или устарел. Запишите заново.")
 
     t0 = time.perf_counter()
+    # Справка по машине тянется один раз и живёт в кэше по марке: она же
+    # понадобится на уточнениях, а платить за неё в каждом раунде незачем.
+    facts = vehicle_facts.lookup(entry["vehicle"])
+    entry["facts"] = facts
     messages = mechanic.build_messages(entry["report"], entry["vehicle"],
-                                       entry["symptom"])
+                                       entry["symptom"], facts)
     opinion, raw = mechanic._call(messages)
     took = int((time.perf_counter() - t0) * 1000)
 

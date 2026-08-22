@@ -25,6 +25,8 @@ from dataclasses import asdict, dataclass, field
 
 import httpx
 
+from service import vehicle_facts
+
 log = logging.getLogger(__name__)
 
 API_URL = os.getenv("AIMLAPI_URL", "https://api.aimlapi.com/v1/chat/completions")
@@ -53,20 +55,27 @@ Hyundai, Renault, Volkswagen, Toyota, а также китайских Haval, Ch
   на этом пробеге и характер симптома со слов владельца.
 
 Правила:
-1. Не выдумывай уверенность. Если улик мало, скажи об этом прямо.
-2. Опирайся на связь симптома с механикой. Объясняй, почему звук ведёт себя
+0. НИКОГДА не называй узел, которого на этой машине нет. Если в справке сказано
+   «ремень ГРМ» — про цепь речи быть не может, и наоборот. Не знаешь
+   устройство — не утверждай, а спроси у владельца. Одна выдуманная деталь
+   обесценивает весь разбор.
+1. Каждая версия должна объяснять ИМЕННО ТУ ЗОНУ, которую услышала акустика.
+   Если предлагаешь узел из другой зоны — прямо скажи, что расходишься с
+   акустикой, и объясни почему. Молча уходить в сторону нельзя.
+2. Не выдумывай уверенность. Если улик мало, скажи об этом прямо.
+3. Опирайся на связь симптома с механикой. Объясняй, почему звук ведёт себя
    именно так (меняется с оборотами, с нагрузкой, с температурой).
-3. Цены давай в рублях, реалистичные для России, с учётом работы.
-4. Если подозреваешь узел безопасности (тормоза, рулевое, подвеска) — ставь
+4. Цены давай в рублях, реалистичные для России, с учётом работы.
+5. Если подозреваешь узел безопасности (тормоза, рулевое, подвеска) — ставь
    высокую срочность.
-5. Пиши для владельца машины, а не для механика. Термин используй, только если
+6. Пиши для владельца машины, а не для механика. Термин используй, только если
    без него теряется смысл, и поясняй его.
-6. НЕ приводи числовые вероятности в тексте для пользователя. Цифры вроде
+7. НЕ приводи числовые вероятности в тексте для пользователя. Цифры вроде
    "0.924" тебе даны как рабочая информация, но они не откалиброваны, и мы
    намеренно не показываем их владельцу. Говори словами: "звук характерен для",
    "менее вероятно", "почти исключено".
-7. Задай 1-3 уточняющих вопроса, ответы на которые сузили бы поиск.
-8. Возвращай ТОЛЬКО JSON по схеме, без markdown и пояснений вокруг."""
+8. Задай 1-3 уточняющих вопроса, ответы на которые сузили бы поиск.
+9. Возвращай ТОЛЬКО JSON по схеме, без markdown и пояснений вокруг."""
 
 SCHEMA_HINT = """{
  "diagnosis": "вывод одной фразой, понятной владельцу",
@@ -113,7 +122,7 @@ def _vehicle_line(v: dict) -> str:
     return f"{name}, пробег {km} км" if km else name
 
 
-def _prompt(report: dict, vehicle: dict, symptom: str) -> str:
+def _prompt(report: dict, vehicle: dict, symptom: str, facts: dict | None = None) -> str:
     dbg = report.get("debug", {})
     regions = ", ".join(
         f"{r['zone']} {r['p']}" for r in dbg.get("regions", [])[:3]) or "нет"
@@ -139,6 +148,8 @@ def _prompt(report: dict, vehicle: dict, symptom: str) -> str:
         "",
         f"Автомобиль: {_vehicle_line(vehicle)}",
         f"Симптом со слов владельца: {symptom or 'не описан'}",
+        "",
+        vehicle_facts.as_prompt_block(facts or {}),
         "",
         "Верни JSON строго по схеме:",
         SCHEMA_HINT,
@@ -240,9 +251,10 @@ def _call(messages: list[dict]) -> tuple[MechanicOpinion, str]:
     return _once(messages, key)
 
 
-def build_messages(report: dict, vehicle: dict, symptom: str) -> list[dict]:
+def build_messages(report: dict, vehicle: dict, symptom: str,
+                   facts: dict | None = None) -> list[dict]:
     return [{"role": "system", "content": SYSTEM},
-            {"role": "user", "content": _prompt(report, vehicle, symptom)}]
+            {"role": "user", "content": _prompt(report, vehicle, symptom, facts)}]
 
 
 def ask(report: dict, vehicle: dict, symptom: str) -> MechanicOpinion:
@@ -253,7 +265,8 @@ def ask(report: dict, vehicle: dict, symptom: str) -> MechanicOpinion:
         return MechanicOpinion(error="акустика не дала опоры для разбора")
     if not api_key():
         return MechanicOpinion(error="AIMLAPI_KEY не задан")
-    return _call(build_messages(report, vehicle, symptom))[0]
+    facts = vehicle_facts.lookup(vehicle)
+    return _call(build_messages(report, vehicle, symptom, facts))[0]
 
 
 def refine(messages: list[dict], answers: str) -> tuple[MechanicOpinion, list[dict]]:
@@ -283,6 +296,13 @@ def refine(messages: list[dict], answers: str) -> tuple[MechanicOpinion, list[di
         "клапанов, износ постели или кулачков распредвала, задиры, ослабший "
         "натяжитель, дефект конкретной детали. Проверенное владельцем — это "
         "факт, а не мнение.\n\n"
+        "Перед ответом сверься сам с собой:\n"
+        "1) Есть ли предлагаемый узел на ЭТОЙ машине? Сверься с проверенными "
+        "данными выше. Если там сказано «ремень ГРМ» — про цепь писать нельзя, "
+        "и наоборот. Выдуманная деталь обесценивает весь разбор.\n"
+        "2) Объясняет ли версия ту зону, которую услышала акустика? Если "
+        "уходишь в другую зону — скажи об этом прямо.\n"
+        "3) Не противоречит ли вывод тому, что владелец уже проверил?\n\n"
         "Перечисли отпавшие версии в поле \"ruled_out\" и подними на первое "
         "место ту, что теперь вероятнее. Если данных всё ещё не хватает, "
         "задай новые вопросы. Формат тот же JSON, плюс поле \"ruled_out\": "
