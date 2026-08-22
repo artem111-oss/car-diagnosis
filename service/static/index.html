@@ -471,7 +471,17 @@
     show("step-car");
   }));
   document.querySelectorAll("[data-next]").forEach(b =>
-    b.addEventListener("click", () => show(b.dataset.next)));
+    b.addEventListener("click", () => {
+      // Уходя с анкеты, просим сервер заранее собрать справку по машине.
+      // Она нужна только к разбору, а пока человек читает инструкцию и пишет
+      // звук, запрос успевает отработать и перестаёт стоить ожидания.
+      if (b.dataset.next === "step-symptom" && $("brand").value.trim()) {
+        const fd = new FormData();
+        ["brand","model","year"].forEach(k => fd.append(k, $(k).value));
+        fetch("/api/prefetch", { method:"POST", body:fd }).catch(() => {});
+      }
+      show(b.dataset.next);
+    }));
 
   $("chips").addEventListener("click", e => {
     const c = e.target.closest(".chip");

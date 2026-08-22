@@ -21,7 +21,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -262,6 +262,24 @@ async def mechanic_refine(rec_id: str = Form(...), answers: str = Form(...)):
     log.info("уточнение %s: ok=%s, раунд %d, за %d мс",
              key, opinion.ok, entry.get("rounds", 0), took)
     return JSONResponse(body)
+
+
+@app.post("/api/prefetch")
+async def prefetch(background: BackgroundTasks, brand: str = Form(""),
+                   model: str = Form(""), year: str = Form("")):
+    """Прогреть справочник, пока пользователь читает инструкцию и пишет звук.
+
+    Справка занимает около 15 секунд и нужна только к моменту разбора. Владелец
+    к этому времени успевает пройти два экрана и записать 15 секунд аудио, так
+    что запрос укладывается в это окно и перестаёт стоить времени. Результат
+    ложится в кэш по марке, откуда его и возьмёт разбор.
+    """
+    if not brand.strip():
+        return {"ok": False}
+    background.add_task(vehicle_facts.lookup,
+                        {"brand": brand.strip()[:40], "model": model.strip()[:40],
+                         "year": year.strip()[:4]})
+    return {"ok": True}
 
 
 @app.post("/api/feedback")

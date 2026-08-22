@@ -79,6 +79,42 @@ def _parse(txt: str) -> dict:
     return json.loads(s[start:end + 1])
 
 
+def _fetch(vehicle: dict) -> dict:
+    """Один заход к справочнику. Пустой словарь на любой неудаче."""
+    try:
+        r = httpx.post(
+            API_URL,
+            headers={"Authorization": f"Bearer {api_key()}",
+                     "Content-Type": "application/json"},
+            json={
+                "model": FACTS_MODEL,
+                "messages": [{"role": "user",
+                              "content": PROMPT.format(vehicle=_vehicle_line(vehicle))}],
+                "temperature": 0.1,
+                "max_tokens": FACTS_MAX_TOKENS,
+                # response_format здесь не задаём: json_object Perplexity
+                # отклоняет, а json_schema в этом шлюзе тоже не проходит
+                # валидацию. Формат держится инструкцией в промпте, надёжность
+                # добирает повтор в lookup() — поисковая модель изредка
+                # отвечает прозой со ссылками вместо JSON.
+            },
+            timeout=FACTS_TIMEOUT,
+        )
+    except httpx.HTTPError as e:
+        log.warning("справочник недоступен: %s", e)
+        return {}
+
+    if r.status_code != 200:
+        log.warning("справочник вернул %s: %s", r.status_code, r.text[:200])
+        return {}
+
+    try:
+        return _parse(r.json()["choices"][0]["message"]["content"])
+    except (KeyError, ValueError, json.JSONDecodeError) as e:
+        log.warning("не разобрали ответ справочника: %s", e)
+        return {}
+
+
 def lookup(vehicle: dict) -> dict:
     """Факты об автомобиле. Пустой словарь, если марка не указана или поиск не удался.
 
@@ -96,33 +132,11 @@ def lookup(vehicle: dict) -> dict:
     if not api_key():
         return {}
 
-    try:
-        r = httpx.post(
-            API_URL,
-            headers={"Authorization": f"Bearer {api_key()}",
-                     "Content-Type": "application/json"},
-            json={
-                "model": FACTS_MODEL,
-                "messages": [{"role": "user",
-                              "content": PROMPT.format(vehicle=_vehicle_line(vehicle))}],
-                "temperature": 0.1,
-                "max_tokens": FACTS_MAX_TOKENS,
-            },
-            timeout=FACTS_TIMEOUT,
-        )
-    except httpx.HTTPError as e:
-        log.warning("справочник недоступен: %s", e)
-        return {}
-
-    if r.status_code != 200:
-        log.warning("справочник вернул %s: %s", r.status_code, r.text[:200])
-        return {}
-
-    try:
-        body = r.json()
-        facts = _parse(body["choices"][0]["message"]["content"])
-    except (KeyError, ValueError, json.JSONDecodeError) as e:
-        log.warning("не разобрали ответ справочника: %s", e)
+    # Sonar — поисковая модель и охотно отвечает прозой со ссылками вместо
+    # JSON. response_format прижимает её к формату, повтор добирает остаток:
+    # без него разбор тянул справку заново и терял на этом секунды.
+    facts = _fetch(vehicle) or _fetch(vehicle)
+    if not facts:
         return {}
 
     with _lock:
