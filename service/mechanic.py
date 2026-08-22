@@ -30,7 +30,9 @@ log = logging.getLogger(__name__)
 API_URL = os.getenv("AIMLAPI_URL", "https://api.aimlapi.com/v1/chat/completions")
 MODEL = os.getenv("AIMLAPI_MODEL", "anthropic/claude-haiku-latest")
 TIMEOUT = float(os.getenv("AIMLAPI_TIMEOUT", "60"))
-MAX_TOKENS = int(os.getenv("AIMLAPI_MAX_TOKENS", "1600"))
+# 1600 не хватало: уточнение длиннее первого разбора на поле ruled_out, ответ
+# обрывался по лимиту и JSON приходил битым всегда в одном месте.
+MAX_TOKENS = int(os.getenv("AIMLAPI_MAX_TOKENS", "3000"))
 
 
 def api_key() -> str:
@@ -94,6 +96,9 @@ class MechanicOpinion:
     diy_checks: list[str] = field(default_factory=list)
     questions: list[str] = field(default_factory=list)
     confidence_note: str = ""
+    # Версии, отпавшие после ответов владельца. Показать, что именно исключено,
+    # часто полезнее нового списка догадок.
+    ruled_out: list[str] = field(default_factory=list)
     model: str = ""
     error: str = ""
 
@@ -153,18 +158,23 @@ def _parse(txt: str) -> dict:
     return json.loads(s[start:end + 1])
 
 
-def ask(report: dict, vehicle: dict, symptom: str) -> MechanicOpinion:
-    """Спросить механика. Никогда не бросает: акустический результат уже есть,
-    и падение LLM не должно ломать основной ответ пользователю."""
-    key = api_key()
-    if not key:
-        return MechanicOpinion(error="AIMLAPI_KEY не задан")
+def _to_opinion(data: dict) -> MechanicOpinion:
+    return MechanicOpinion(
+        ok=True,
+        diagnosis=str(data.get("diagnosis", "")),
+        reasoning=str(data.get("reasoning", "")),
+        parts=[p for p in data.get("parts", []) if isinstance(p, dict)][:5],
+        urgency=str(data.get("urgency", "")),
+        urgency_why=str(data.get("urgency_why", "")),
+        diy_checks=[str(x) for x in data.get("diy_checks", [])][:5],
+        questions=[str(x) for x in data.get("questions", [])][:3],
+        confidence_note=str(data.get("confidence_note", "")),
+        ruled_out=[str(x) for x in data.get("ruled_out", [])][:5],
+        model=MODEL,
+    )
 
-    # На неуверенном вердикте рассуждать не о чем: модель начнёт придумывать,
-    # а мы заплатим за токены. Экономит деньги и убирает источник выдумок.
-    if report.get("status") == "uncertain":
-        return MechanicOpinion(error="акустика не дала опоры для разбора")
 
+def _once(messages: list[dict], key: str) -> tuple[MechanicOpinion, str]:
     try:
         r = httpx.post(
             API_URL,
@@ -172,40 +182,114 @@ def ask(report: dict, vehicle: dict, symptom: str) -> MechanicOpinion:
                      "Content-Type": "application/json"},
             json={
                 "model": MODEL,
-                "messages": [
-                    {"role": "system", "content": SYSTEM},
-                    {"role": "user", "content": _prompt(report, vehicle, symptom)},
-                ],
+                "messages": messages,
                 "temperature": 0.2,
                 "max_tokens": MAX_TOKENS,
+                # Просить JSON в промпте недостаточно: на длинных ответах модель
+                # срывается в невалидный синтаксис. Наблюдалось на уточнении —
+                # "Expecting ',' delimiter: line 25".
+                "response_format": {"type": "json_object"},
             },
             timeout=TIMEOUT,
         )
     except httpx.HTTPError as e:
         log.warning("AIMLAPI недоступен: %s", e)
-        return MechanicOpinion(error="сервис разбора временно недоступен")
+        return MechanicOpinion(error="сервис разбора временно недоступен"), ""
 
     if r.status_code != 200:
         log.warning("AIMLAPI %s: %s", r.status_code, r.text[:200])
-        return MechanicOpinion(error=f"сервис разбора вернул {r.status_code}")
+        return MechanicOpinion(error=f"сервис разбора вернул {r.status_code}"), ""
 
     try:
-        body = r.json()
-        data = _parse(body["choices"][0]["message"]["content"])
-    except (KeyError, ValueError, json.JSONDecodeError) as e:
-        log.warning("не разобрали ответ LLM: %s", e)
-        return MechanicOpinion(error="не удалось разобрать ответ")
+        choice = r.json()["choices"][0]
+        raw = choice["message"]["content"]
+        finish = choice.get("finish_reason", "")
+    except (KeyError, ValueError) as e:
+        log.warning("неожиданная форма ответа AIMLAPI: %s", e)
+        return MechanicOpinion(error="не удалось разобрать ответ"), ""
 
-    parts = [p for p in data.get("parts", []) if isinstance(p, dict)][:5]
-    return MechanicOpinion(
-        ok=True,
-        diagnosis=str(data.get("diagnosis", "")),
-        reasoning=str(data.get("reasoning", "")),
-        parts=parts,
-        urgency=str(data.get("urgency", "")),
-        urgency_why=str(data.get("urgency_why", "")),
-        diy_checks=[str(x) for x in data.get("diy_checks", [])][:5],
-        questions=[str(x) for x in data.get("questions", [])][:3],
-        confidence_note=str(data.get("confidence_note", "")),
-        model=MODEL,
-    )
+    try:
+        return _to_opinion(_parse(raw)), raw
+    except (ValueError, json.JSONDecodeError) as e:
+        # Обрыв по лимиту токенов даёт синтаксически битый JSON всегда в одном
+        # месте, и повтор его не лечит — нужен запас по max_tokens.
+        if finish == "length":
+            log.warning("ответ обрезан по max_tokens=%d, JSON неполный", MAX_TOKENS)
+            return MechanicOpinion(error="ответ не поместился в лимит"), ""
+        log.warning("не разобрали ответ LLM (finish_reason=%s): %s", finish, e)
+        return MechanicOpinion(error="не удалось разобрать ответ"), ""
+
+
+def _call(messages: list[dict]) -> tuple[MechanicOpinion, str]:
+    """Заход к модели с одним повтором на случай битого JSON.
+
+    Никогда не бросает: акустический вердикт уже у пользователя на экране, и
+    проблема с LLM должна деградировать в пустой блок, а не в ошибку.
+    """
+    key = api_key()
+    if not key:
+        return MechanicOpinion(error="AIMLAPI_KEY не задан"), ""
+
+    opinion, raw = _once(messages, key)
+    if opinion.ok or opinion.error != "не удалось разобрать ответ":
+        return opinion, raw
+
+    # Повторяем только разбор ответа: сеть и коды ошибок повтором не лечатся,
+    # а вот сорванный синтаксис со второй попытки обычно выходит корректным.
+    log.info("повторяю запрос к модели после битого JSON")
+    return _once(messages, key)
+
+
+def build_messages(report: dict, vehicle: dict, symptom: str) -> list[dict]:
+    return [{"role": "system", "content": SYSTEM},
+            {"role": "user", "content": _prompt(report, vehicle, symptom)}]
+
+
+def ask(report: dict, vehicle: dict, symptom: str) -> MechanicOpinion:
+    """Первый разбор по акустике, марке и симптому."""
+    # На неуверенном вердикте рассуждать не о чем: модель начнёт придумывать,
+    # а мы заплатим за токены. Экономит деньги и убирает источник выдумок.
+    if report.get("status") == "uncertain":
+        return MechanicOpinion(error="акустика не дала опоры для разбора")
+    if not api_key():
+        return MechanicOpinion(error="AIMLAPI_KEY не задан")
+    return _call(build_messages(report, vehicle, symptom))[0]
+
+
+def refine(messages: list[dict], answers: str) -> tuple[MechanicOpinion, list[dict]]:
+    """Уточнить вывод по ответам владельца.
+
+    Здесь механик впервые получает то, чего нет ни в звуке, ни в анкете: что
+    уже проверяли и с каким результатом. На реальном случае это решает исход —
+    если зазоры клапанов замерены и в норме, версия про гидрокомпенсаторы
+    отпадает, и на первое место выходят направляющие. Без ответа владельца
+    модель до этого не дойдёт никогда.
+
+    Возвращает мнение и продолженную историю, чтобы диалог можно было вести
+    дальше.
+    """
+    if not api_key():
+        return MechanicOpinion(error="AIMLAPI_KEY не задан"), messages
+
+    convo = messages + [{"role": "user", "content": (
+        "Владелец ответил на твои вопросы и добавил подробности:\n\n"
+        f"{answers}\n\n"
+        "Уточни вывод с учётом этого.\n\n"
+        "Главное правило: если ответ владельца исключает версию — она "
+        "ОТПАДАЕТ, и держаться за неё нельзя. Не выкручивайся аргументом "
+        "вида «типовая причина всё равно возможна, просто по другой "
+        "механике». Когда частые причины отпали, переходи к более редким, "
+        "которые объясняют ровно эту картину: износ направляющих и стержней "
+        "клапанов, износ постели или кулачков распредвала, задиры, ослабший "
+        "натяжитель, дефект конкретной детали. Проверенное владельцем — это "
+        "факт, а не мнение.\n\n"
+        "Перечисли отпавшие версии в поле \"ruled_out\" и подними на первое "
+        "место ту, что теперь вероятнее. Если данных всё ещё не хватает, "
+        "задай новые вопросы. Формат тот же JSON, плюс поле \"ruled_out\": "
+        "[\"версия, которая отпала, и почему\"]."
+    )}]
+
+    opinion, raw = _call(convo)
+    if opinion.ok and raw:
+        convo = convo + [{"role": "assistant", "content": raw}]
+    return opinion, convo

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="Что стучит">
+  <title>Что стучит</title>
+  <!-- Звуковая волна проходит сквозь мембрану стетоскопа: инструмент, которым
+       механик слушает двигатель, стоит ровно там, где сигнал становится
+       диагнозом. Всё рисуется currentColor, поэтому знак живёт в любой теме. -->
+  <g stroke="currentColor" stroke-linecap="round" stroke-width="2.1">
+    <path d="M3 14.5v3"/>
+    <path d="M7 11v10" opacity=".72"/>
+    <path d="M11 8.5v15" opacity=".45"/>
+    <path d="M25 11v10" opacity=".72"/>
+    <path d="M29 14.5v3"/>
+    <path d="M21 8.5v15" opacity=".45"/>
+  </g>
+  <circle cx="16" cy="13" r="5.1" stroke="currentColor" stroke-width="2.4"/>
+  <path d="M16 18.1v6.2a2.6 2.6 0 0 0 2.6 2.6h1.1" stroke="currentColor"
+        stroke-width="2.1" stroke-linecap="round"/>
+</svg>

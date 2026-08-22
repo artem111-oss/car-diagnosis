@@ -49,7 +49,8 @@ _hits: dict[str, deque] = defaultdict(deque)
 # Готовая акустика ждёт здесь, пока фронт запросит разбор механиком. На одном
 # инстансе словаря достаточно; при нескольких репликах это переезжает в Redis.
 PENDING_MAX = int(os.getenv("PENDING_MAX", "500"))
-_pending: dict[str, tuple[dict, dict, str]] = {}
+MAX_ROUNDS = int(os.getenv("MAX_REFINE_ROUNDS", "5"))
+_pending: dict[str, dict] = {}
 
 
 def _warmup(engine: Engine) -> None:
@@ -189,7 +190,8 @@ async def analyse(
     )
     # Разбор идёт вторым запросом: акустика готова за пару секунд, а LLM думает
     # около двенадцати. Держать готовый вердикт ради неё — терять пользователя.
-    _pending[rec_id] = (payload, vehicle, symptom)
+    _pending[rec_id] = {"report": payload, "vehicle": vehicle,
+                        "symptom": symptom, "messages": [], "rounds": 0}
     while len(_pending) > PENDING_MAX:
         _pending.pop(next(iter(_pending)))
 
@@ -199,20 +201,62 @@ async def analyse(
 
 
 @app.post("/api/mechanic")
-async def mechanic_opinion(request: Request, rec_id: str = Form(...)):
+async def mechanic_opinion(rec_id: str = Form(...)):
     """Вторая фаза: разбор механиком по уже посчитанной акустике."""
-    entry = _pending.get(rec_id.strip()[:32])
+    key = rec_id.strip()[:32]
+    entry = _pending.get(key)
     if entry is None:
         raise HTTPException(404, "Анализ не найден или устарел. Запишите заново.")
 
-    payload, vehicle, symptom = entry
     t0 = time.perf_counter()
-    opinion = mechanic.ask(payload, vehicle, symptom)
+    messages = mechanic.build_messages(entry["report"], entry["vehicle"],
+                                       entry["symptom"])
+    opinion, raw = mechanic._call(messages)
     took = int((time.perf_counter() - t0) * 1000)
+
+    if opinion.ok and raw:
+        # История нужна, чтобы уточнения продолжали тот же разговор, а не
+        # начинали новый: механик должен помнить, что уже предполагал.
+        entry["messages"] = messages + [{"role": "assistant", "content": raw}]
 
     body = opinion.to_dict()
     body["took_ms"] = took
-    log.info("разбор %s: ok=%s за %d мс", rec_id, opinion.ok, took)
+    log.info("разбор %s: ok=%s за %d мс", key, opinion.ok, took)
+    return JSONResponse(body)
+
+
+@app.post("/api/mechanic/refine")
+async def mechanic_refine(rec_id: str = Form(...), answers: str = Form(...)):
+    """Уточнение: владелец отвечает на вопросы, механик пересматривает вывод."""
+    key = rec_id.strip()[:32]
+    entry = _pending.get(key)
+    if entry is None:
+        raise HTTPException(404, "Анализ не найден или устарел. Запишите заново.")
+    if not entry.get("messages"):
+        raise HTTPException(409, "Сначала нужен первичный разбор.")
+
+    text = answers.strip()[:2000]
+    if not text:
+        raise HTTPException(400, "Напишите, что удалось выяснить.")
+    if entry.get("rounds", 0) >= MAX_ROUNDS:
+        raise HTTPException(429, "Достигнут предел уточнений для этой записи.")
+
+    t0 = time.perf_counter()
+    opinion, convo = mechanic.refine(entry["messages"], text)
+    took = int((time.perf_counter() - t0) * 1000)
+
+    if opinion.ok:
+        entry["messages"] = convo
+        entry["rounds"] = entry.get("rounds", 0) + 1
+        _state["corpus"].save_clarification(key, answers=text,
+                                            diagnosis=opinion.diagnosis,
+                                            ruled_out=opinion.ruled_out)
+
+    body = opinion.to_dict()
+    body["took_ms"] = took
+    body["rounds_left"] = MAX_ROUNDS - entry.get("rounds", 0)
+    log.info("уточнение %s: ok=%s, раунд %d, за %d мс",
+             key, opinion.ok, entry.get("rounds", 0), took)
     return JSONResponse(body)
 
 

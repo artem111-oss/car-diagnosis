@@ -103,3 +103,47 @@ def test_timeout_does_not_raise(report, monkeypatch):
 def test_vehicle_line_handles_missing_fields():
     assert mechanic._vehicle_line({}) == "марка не указана"
     assert "Lada" in mechanic._vehicle_line({"brand": "Lada"})
+
+
+def test_refine_keeps_the_conversation(monkeypatch):
+    """Уточнение продолжает диалог, а не начинает новый: механик должен
+    помнить, что уже предполагал, иначе вычёркивать будет нечего."""
+    monkeypatch.setenv("AIMLAPI_KEY", "test-key")
+    monkeypatch.setattr(mechanic, "_call", lambda msgs: (
+        mechanic.MechanicOpinion(ok=True, diagnosis="направляющие",
+                                 ruled_out=["гидрокомпенсаторы"]), '{"x":1}'))
+
+    prior = [{"role": "system", "content": "s"},
+             {"role": "user", "content": "u"},
+             {"role": "assistant", "content": "a"}]
+    op, convo = mechanic.refine(prior, "зазоры в норме")
+
+    assert op.ok and op.ruled_out == ["гидрокомпенсаторы"]
+    assert convo[:3] == prior, "прежняя история должна сохраниться"
+    assert "зазоры в норме" in convo[3]["content"]
+    assert convo[-1]["role"] == "assistant"
+
+
+def test_refine_tells_the_model_not_to_defend_ruled_out_causes(monkeypatch):
+    """Наблюдалось вживую: исключённую версию модель защищала аргументом
+    «та же причина, просто по другой механике». Правило про переход к редким
+    причинам должно уходить в запрос."""
+    monkeypatch.setenv("AIMLAPI_KEY", "test-key")
+    captured = {}
+
+    def grab(msgs):
+        captured["text"] = msgs[-1]["content"]
+        return mechanic.MechanicOpinion(ok=True), "{}"
+
+    monkeypatch.setattr(mechanic, "_call", grab)
+    mechanic.refine([{"role": "user", "content": "u"}], "проверял, в норме")
+
+    assert "ОТПАДАЕТ" in captured["text"]
+    assert "редким" in captured["text"]
+
+
+def test_refine_without_key_returns_history_untouched(monkeypatch):
+    monkeypatch.delenv("AIMLAPI_KEY", raising=False)
+    prior = [{"role": "user", "content": "u"}]
+    op, convo = mechanic.refine(prior, "ответ")
+    assert op.ok is False and convo == prior

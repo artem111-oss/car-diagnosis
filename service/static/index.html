@@ -5,10 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0e1211">
 <meta name="description" content="Запишите звук автомобиля — акустическая модель определит зону неисправности, а ИИ-механик назовёт вероятные узлы и цену ремонта.">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<meta property="og:title" content="Что стучит — диагностика автомобиля по звуку">
+<meta property="og:description" content="Запишите звук на телефон и узнайте, где искать причину. Бесплатно, без адаптеров.">
+<meta property="og:type" content="website">
 <title>Что стучит — диагностика автомобиля по звуку</title>
 <style>
+  /* Тема одна — тёмная. Сервисом пользуются в гараже, на парковке, вечером:
+     светлый экран там слепит, а тёмный читается. color-scheme сообщает об этом
+     браузеру, чтобы скроллбары и системные поля не остались белыми. */
   :root{
-    color-scheme: dark light;
+    color-scheme: dark;
     --bg:#0e1211; --bg-2:#141a18; --card:#171e1b; --card-2:#1d2622;
     --line:#26302b; --line-2:#33403a;
     --ink:#eaefea; --ink-2:#a7b2aa; --ink-3:#717d75;
@@ -21,19 +28,6 @@
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
   }
-  @media (prefers-color-scheme: light){
-    :root{
-      --bg:#f4f6f4; --bg-2:#eaeeeb; --card:#ffffff; --card-2:#f2f5f2;
-      --line:#dde3de; --line-2:#c8d1ca;
-      --ink:#141a17; --ink-2:#4f5a53; --ink-3:#7a857d;
-      --amber:#c65d13; --amber-2:#8f4109; --amber-dim:rgba(198,93,19,.09);
-      --green:#1f7a4d; --green-dim:rgba(31,122,77,.09);
-      --red:#b23a34; --red-dim:rgba(178,58,52,.09);
-      --yellow:#96700c; --yellow-dim:rgba(150,112,12,.1);
-      --shadow:0 1px 2px rgba(20,30,25,.06), 0 10px 30px -14px rgba(20,30,25,.18);
-    }
-  }
-
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html{scroll-behavior:smooth;}
   @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto;} *{animation:none!important;transition:none!important;}}
@@ -191,7 +185,6 @@
     display:inline-block;font-size:12px;padding:3px 10px;border-radius:6px;
     background:rgba(255,255,255,.07);color:var(--ink-2);margin-bottom:9px;font-weight:560;
   }
-  @media (prefers-color-scheme:light){.badge{background:rgba(20,30,25,.06);}}
   .verdict p{font-size:14px;color:var(--ink-2);margin:0;}
 
   .kv{display:flex;align-items:baseline;gap:10px;padding:14px 0;border-bottom:1px solid var(--line);margin-bottom:14px;}
@@ -219,7 +212,6 @@
   .lk.высокая{background:var(--red-dim);color:var(--red);}
   .lk.средняя{background:var(--yellow-dim);color:var(--yellow);}
   .lk.низкая{background:rgba(255,255,255,.06);color:var(--ink-3);}
-  @media (prefers-color-scheme:light){.lk.низкая{background:rgba(20,30,25,.05);}}
   .part p{font-size:14px;color:var(--ink-2);margin:0 0 7px;}
   .part .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink-3);padding-top:8px;border-top:1px solid var(--line);}
   .part .meta b{color:var(--ink-2);font-weight:600;}
@@ -234,13 +226,30 @@
   .urg.high{background:var(--yellow-dim);color:var(--yellow);}
   .urg.medium{background:rgba(255,255,255,.06);color:var(--ink-2);}
   .urg.low{background:var(--green-dim);color:var(--green);}
-  @media (prefers-color-scheme:light){.urg.medium{background:rgba(20,30,25,.05);}}
 
   .note{font-size:13px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:13px;margin-top:14px;}
   details{margin-top:12px;}
   summary{font-size:13px;color:var(--ink-3);cursor:pointer;user-select:none;}
   summary:hover{color:var(--ink-2);}
   pre{background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:12px;overflow-x:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);margin:10px 0 0;}
+
+  /* ---------- уточнения ---------- */
+  .refine{
+    margin-top:18px;padding-top:18px;border-top:1px solid var(--line);
+  }
+  .refine-hd{
+    display:flex;align-items:center;gap:9px;margin-bottom:11px;
+    font-size:15px;color:var(--amber-2);
+  }
+  .refine-hd svg{width:17px;height:17px;flex:none;}
+  .qlist{margin:0 0 13px;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px;}
+  .qlist li{
+    font-size:14.3px;color:var(--ink-2);background:var(--card-2);
+    border-left:2px solid var(--amber);padding:9px 13px;border-radius:0 8px 8px 0;
+  }
+  .refine textarea{margin-bottom:11px;}
+  .ulist.out li{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--line-2);}
+  .ulist.out li::marker{color:var(--ink-3);}
 
   .mdiag{font-size:16.5px;font-weight:620;margin:0 0 12px;letter-spacing:-.01em;}
   .mech-in{animation:fade .35s ease;}
@@ -278,8 +287,14 @@
 <div class="top">
   <div class="top-in">
     <span class="mark" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#1c0d02" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 12h2l2-5h10l2 5h2"/><circle cx="7.5" cy="15.5" r="1.7"/><circle cx="16.5" cy="15.5" r="1.7"/>
+      <svg viewBox="0 0 32 32" fill="none">
+        <g stroke="#1c0d02" stroke-linecap="round" stroke-width="2.4">
+          <path d="M4 14.5v3" opacity=".55"/><path d="M8.5 11v10" opacity=".8"/>
+          <path d="M23.5 11v10" opacity=".8"/><path d="M28 14.5v3" opacity=".55"/>
+        </g>
+        <circle cx="16" cy="13.4" r="4.9" stroke="#1c0d02" stroke-width="2.6"/>
+        <path d="M16 18.3v5.8a2.5 2.5 0 0 0 2.5 2.5h1" stroke="#1c0d02"
+              stroke-width="2.3" stroke-linecap="round"/>
       </svg>
     </span>
     <span class="brand">Что стучит</span>
@@ -429,7 +444,7 @@
     ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
   const RECORD_SECONDS = 15;
-  const state = { symptom: [], blob: null };
+  const state = { symptom: [], blob: null, roundsLeft: 5 };
   const STEPS = ["step-car","step-symptom","step-record","step-loading","step-result"];
   const PROGRESS = { "step-car":1, "step-symptom":2, "step-record":3, "step-loading":4, "step-result":4 };
 
@@ -586,7 +601,8 @@
       fd.append("rec_id", id);
       const res = await fetch("/api/mechanic", { method:"POST", body:fd });
       const m = await res.json();
-      slot.innerHTML = res.ok && m.ok ? mechanicHtml(m) : "";
+      if (res.ok && m.ok) { slot.innerHTML = mechanicHtml(m); bindRefine(id); }
+      else slot.innerHTML = "";
     } catch { slot.innerHTML = ""; }
   }
 
@@ -616,10 +632,66 @@
       ${parts}
       ${(m.diy_checks || []).length ? `<p class="sub" style="margin:16px 0 8px">Что проверить самому</p>
         <ul class="ulist">${m.diy_checks.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
-      ${(m.questions || []).length ? `<p class="sub" style="margin:16px 0 8px">Это сузило бы поиск</p>
-        <ul class="ulist">${m.questions.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${(m.ruled_out || []).length ? `<p class="sub" style="margin:16px 0 8px">Отпало после ваших уточнений</p>
+        <ul class="ulist out">${m.ruled_out.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
       ${m.confidence_note ? `<p class="note">${esc(m.confidence_note)}</p>` : ""}
+      ${refineHtml(m)}
     </div>`;
+  }
+
+  /* Уточнения — то место, где догадка становится диагнозом. Механик видит
+     только звук и анкету; что уже проверяли и с каким результатом, знает
+     лишь владелец. Один ответ способен вычеркнуть главную версию. */
+  function refineHtml(m){
+    const qs = (m.questions || []);
+    if (state.roundsLeft === 0) return "";
+    return `
+      <div class="refine">
+        <div class="refine-hd">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-9 8.4L3 21l1.1-3.3A8.4 8.4 0 1121 11.5z"/></svg>
+          <b>${qs.length ? "Ответьте — вывод станет точнее" : "Есть что добавить?"}</b>
+        </div>
+        ${qs.length ? `<ul class="qlist">${qs.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+        <textarea id="refine-in" rows="3" placeholder="${qs.length
+          ? "Например: зазоры клапанов замерили — в норме. Масло менял 3 тыс. км назад, 5W-40."
+          : "Что ещё знаете о проблеме: когда началась, что уже меняли, как ведёт себя на холодную."}"></textarea>
+        <button class="btn" id="refine-go">Уточнить диагноз</button>
+        <p class="err hidden" id="refine-err"></p>
+      </div>`;
+  }
+
+  function bindRefine(id){
+    const btn = $("refine-go");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const text = $("refine-in").value.trim();
+      const err = $("refine-err");
+      if (text.length < 3) {
+        err.textContent = "Напишите, что удалось выяснить.";
+        err.classList.remove("hidden");
+        return;
+      }
+      err.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Механик пересматривает…";
+      try {
+        const fd = new FormData();
+        fd.append("rec_id", id);
+        fd.append("answers", text);
+        const res = await fetch("/api/mechanic/refine", { method:"POST", body:fd });
+        const m = await res.json();
+        if (!res.ok || !m.ok) throw new Error(m.detail || m.error || "Не получилось уточнить");
+        state.roundsLeft = m.rounds_left;
+        $("mech-slot").innerHTML = mechanicHtml(m);
+        bindRefine(id);
+        $("mech-slot").scrollIntoView({ block:"start" });
+      } catch (e) {
+        err.textContent = e.message;
+        err.classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "Уточнить диагноз";
+      }
+    });
   }
 
   function render(d){

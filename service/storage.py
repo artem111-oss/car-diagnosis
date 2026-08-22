@@ -31,6 +31,7 @@ class Corpus:
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.records = self.root / "records.jsonl"
         self.feedback = self.root / "feedback.jsonl"
+        self.clarifications = self.root / "clarifications.jsonl"
 
     @staticmethod
     def new_id() -> str:
@@ -61,6 +62,23 @@ class Corpus:
             "debug": report.get("debug", {}),
         }
         self._append(self.records, row)
+
+    def save_clarification(self, rec_id: str, *, answers: str, diagnosis: str,
+                           ruled_out: list[str]) -> None:
+        """Ответы владельца на вопросы механика.
+
+        Ценность отдельная от аудио: здесь записано, что уже проверяли и с каким
+        результатом. Это именно тот контекст, которого нет ни в звуке, ни в
+        анкете, и он же объясняет, почему уточнённый вывод отличается от
+        первого.
+        """
+        self._append(self.clarifications, {
+            "id": rec_id,
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "answers": answers,
+            "diagnosis": diagnosis,
+            "ruled_out": ruled_out,
+        })
 
     def save_feedback(self, rec_id: str, *, actual: str, comment: str) -> None:
         """Что на самом деле нашли на подъёмнике.

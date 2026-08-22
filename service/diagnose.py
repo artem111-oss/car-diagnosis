@@ -138,6 +138,13 @@ class Engine:
             visible = versions
 
         band = t.band.value
+        # Полоса приходит из триажа, а статус — из головы kind, и они могут
+        # разойтись: «не могу определить» рядом со «средней уверенностью»
+        # читается как сбой сервиса. На неуверенном вердикте полосу приводим
+        # к тому же смыслу, что и заголовок.
+        if d.verdict.value == "uncertain":
+            band = "abstain"
+
         report = Report(
             status=d.verdict.value,
             headline=self._headline(d.verdict.value, t.triage, band),
