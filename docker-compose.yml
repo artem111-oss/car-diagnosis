@@ -1,0 +1,47 @@
+# Прод-раскладка: сервис за Caddy, который сам получает и продлевает TLS.
+#
+# HTTPS здесь не украшение. Браузер не даёт доступ к микрофону на любом хосте
+# кроме localhost без защищённого соединения, поэтому без сертификата главная
+# функция сервиса просто не работает.
+#
+#   cp service/.env.example .env   # заполнить AIMLAPI_KEY и DOMAIN
+#   docker compose up -d
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CORPUS_DIR: /data/corpus
+    volumes:
+      # Корпус переживает пересборку образа: это собранные данные, а не кэш.
+      - corpus:/data/corpus
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?укажите DOMAIN в .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  corpus:
+  caddy_data:
+  caddy_config:

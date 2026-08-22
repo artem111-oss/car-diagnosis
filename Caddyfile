@@ -1,0 +1,24 @@
+{$DOMAIN} {
+	encode gzip zstd
+
+	# Загрузка аудио: держим запас над MAX_UPLOAD_MB сервиса.
+	request_body {
+		max_size 30MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Микрофон нужен нам, всё остальное запрещаем.
+		Permissions-Policy "microphone=(self), camera=(), geolocation=()"
+		-Server
+	}
+
+	reverse_proxy app:8080 {
+		# Анализ занимает секунды, а разбор механиком — до минуты.
+		transport http {
+			read_timeout 120s
+		}
+	}
+}

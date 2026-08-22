@@ -3,496 +3,668 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Диагностика по звуку</title>
+<meta name="theme-color" content="#0e1211">
+<meta name="description" content="Запишите звук автомобиля — акустическая модель определит зону неисправности, а ИИ-механик назовёт вероятные узлы и цену ремонта.">
+<title>Что стучит — диагностика автомобиля по звуку</title>
 <style>
   :root{
-    --bg:#0f1310; --card:#171d19; --card-2:#1e2621;
-    --ink:#e8ede8; --ink-soft:#a3ada5; --ink-faint:#6f7a72;
-    --line:#2b352f; --line-2:#3a453e;
-    --accent:#e8722c; --accent-ink:#ffd8bb;
-    --ok:#3fa96b; --warn:#d6a028; --crit:#d9534f;
-    --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    --mono:"SF Mono","Cascadia Mono",Consolas,monospace;
+    color-scheme: dark light;
+    --bg:#0e1211; --bg-2:#141a18; --card:#171e1b; --card-2:#1d2622;
+    --line:#26302b; --line-2:#33403a;
+    --ink:#eaefea; --ink-2:#a7b2aa; --ink-3:#717d75;
+    --amber:#f0872e; --amber-2:#ffb46b; --amber-dim:rgba(240,135,46,.13);
+    --green:#3fb87a; --green-dim:rgba(63,184,122,.13);
+    --red:#e2635c; --red-dim:rgba(226,99,92,.13);
+    --yellow:#dfa93a; --yellow-dim:rgba(223,169,58,.13);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    --r:14px;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;
   }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f4f6f4; --bg-2:#eaeeeb; --card:#ffffff; --card-2:#f2f5f2;
+      --line:#dde3de; --line-2:#c8d1ca;
+      --ink:#141a17; --ink-2:#4f5a53; --ink-3:#7a857d;
+      --amber:#c65d13; --amber-2:#8f4109; --amber-dim:rgba(198,93,19,.09);
+      --green:#1f7a4d; --green-dim:rgba(31,122,77,.09);
+      --red:#b23a34; --red-dim:rgba(178,58,52,.09);
+      --yellow:#96700c; --yellow-dim:rgba(150,112,12,.1);
+      --shadow:0 1px 2px rgba(20,30,25,.06), 0 10px 30px -14px rgba(20,30,25,.18);
+    }
+  }
+
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto;} *{animation:none!important;transition:none!important;}}
   body{
-    margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
-    font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;
-    padding:0 0 40px;
+    margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    font-size:16.5px;line-height:1.55;-webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
   }
-  .wrap{max-width:560px;margin:0 auto;padding:0 18px;}
+  .wrap{max-width:640px;margin:0 auto;padding:0 20px;}
+  .narrow{max-width:520px;}
 
-  header{padding:22px 0 18px;border-bottom:1px solid var(--line);margin-bottom:22px;}
-  .logo{display:flex;align-items:center;gap:10px;}
-  .logo-mark{
-    width:30px;height:30px;border-radius:7px;background:var(--accent);
-    display:grid;place-items:center;flex:none;
+  /* ---------- шапка ---------- */
+  .top{
+    position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 86%,transparent);
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
   }
-  .logo-mark svg{width:17px;height:17px;display:block;}
-  h1{font-size:19px;margin:0;font-weight:650;letter-spacing:-.01em;}
-  .tagline{color:var(--ink-soft);font-size:14px;margin:6px 0 0;}
-
-  .steps{display:flex;gap:6px;margin-bottom:20px;}
-  .steps i{
-    height:3px;flex:1;background:var(--line);border-radius:2px;
-    transition:background .25s;
+  .top-in{max-width:640px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:10px;}
+  .mark{
+    width:29px;height:29px;border-radius:8px;flex:none;
+    background:linear-gradient(145deg,var(--amber),#c9600f);
+    display:grid;place-items:center;
   }
-  .steps i.on{background:var(--accent);}
+  .mark svg{width:16px;height:16px;}
+  .brand{font-weight:680;font-size:15.5px;letter-spacing:-.015em;}
+  .top .cta-mini{
+    margin-left:auto;font-size:13.5px;font-weight:600;color:var(--amber);
+    background:none;border:none;cursor:pointer;font-family:inherit;padding:6px 2px;
+  }
 
+  /* ---------- герой ---------- */
+  .hero{padding:44px 0 30px;}
+  .kicker{
+    display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;
+    color:var(--amber-2);background:var(--amber-dim);border:1px solid rgba(240,135,46,.22);
+    padding:5px 11px;border-radius:99px;margin-bottom:16px;letter-spacing:.01em;
+  }
+  .pulse{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 2.2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  h1{
+    font-size:clamp(29px,7.4vw,41px);line-height:1.09;margin:0 0 14px;
+    font-weight:730;letter-spacing:-.03em;text-wrap:balance;
+  }
+  h1 em{font-style:normal;color:var(--amber);}
+  .lede{font-size:17.5px;color:var(--ink-2);margin:0 0 26px;max-width:33ch;}
+
+  .btn{
+    display:block;width:100%;border:none;border-radius:12px;padding:16px 20px;
+    font-size:16.5px;font-weight:670;cursor:pointer;font-family:inherit;
+    background:var(--amber);color:#1c0d02;letter-spacing:-.01em;
+    box-shadow:0 4px 14px -4px rgba(240,135,46,.5);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px);box-shadow:0 7px 20px -5px rgba(240,135,46,.55);}
+  .btn:active{transform:translateY(0);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none;}
+  .btn.sec{
+    background:transparent;color:var(--ink-2);border:1px solid var(--line-2);
+    box-shadow:none;font-weight:600;margin-top:9px;
+  }
+  .btn.sec:hover{color:var(--ink);border-color:var(--ink-3);transform:none;box-shadow:none;}
+  .btn:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
+    outline:2px solid var(--amber);outline-offset:2px;
+  }
+
+  .under-cta{
+    display:flex;gap:16px;justify-content:center;margin-top:14px;
+    font-size:13px;color:var(--ink-3);flex-wrap:wrap;
+  }
+  .under-cta span{display:inline-flex;align-items:center;gap:5px;}
+  .under-cta svg{width:13px;height:13px;flex:none;color:var(--green);}
+
+  /* ---------- полосы-разделители ---------- */
+  section.blk{padding:34px 0;border-top:1px solid var(--line);}
+  h2{font-size:21px;font-weight:690;letter-spacing:-.022em;margin:0 0 6px;text-wrap:balance;}
+  .sub{color:var(--ink-2);font-size:15.5px;margin:0 0 20px;}
+
+  /* как работает */
+  .flow{display:flex;flex-direction:column;gap:2px;}
+  .fstep{display:grid;grid-template-columns:34px 1fr;gap:14px;padding:13px 0;}
+  .fnum{
+    width:26px;height:26px;border-radius:8px;background:var(--card-2);
+    border:1px solid var(--line-2);display:grid;place-items:center;
+    font-family:var(--mono);font-size:12px;color:var(--amber);font-weight:600;
+  }
+  .fstep h3{font-size:15.5px;margin:2px 0 3px;font-weight:640;}
+  .fstep p{font-size:14.5px;color:var(--ink-2);margin:0;}
+
+  /* честность */
+  .honest{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:20px;box-shadow:var(--shadow);
+  }
+  .honest h2{font-size:18.5px;}
+  .honest p{font-size:14.8px;color:var(--ink-2);margin:0 0 12px;}
+  .honest p:last-child{margin:0;}
+  .honest b{color:var(--ink);font-weight:640;}
+
+  /* ---------- карточки / формы ---------- */
   .card{
-    background:var(--card);border:1px solid var(--line);border-radius:12px;
-    padding:20px;margin-bottom:16px;
+    background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:20px;box-shadow:var(--shadow);margin-bottom:14px;
   }
-  h2{font-size:17px;margin:0 0 4px;font-weight:650;}
-  .sub{color:var(--ink-soft);font-size:14px;margin:0 0 16px;}
-
-  label{display:block;font-size:13px;color:var(--ink-soft);margin:0 0 5px;}
+  label{display:block;font-size:13px;color:var(--ink-2);margin:0 0 6px;font-weight:550;}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-  input[type=text],input[type=number],select,textarea{
-    width:100%;background:var(--card-2);border:1px solid var(--line-2);
-    color:var(--ink);border-radius:8px;padding:11px 12px;font-size:16px;
-    font-family:inherit;margin-bottom:13px;
+  input,textarea{
+    width:100%;background:var(--card-2);border:1px solid var(--line-2);color:var(--ink);
+    border-radius:10px;padding:12px 13px;font-size:16px;font-family:inherit;
+    margin-bottom:13px;transition:border-color .15s;
   }
-  input:focus,select:focus,textarea:focus{
-    outline:2px solid var(--accent);outline-offset:1px;border-color:transparent;
-  }
-  textarea{resize:vertical;min-height:70px;}
+  input::placeholder,textarea::placeholder{color:var(--ink-3);}
+  input:focus,textarea:focus{border-color:var(--amber);}
+  textarea{resize:vertical;min-height:66px;}
 
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
   .chip{
-    border:1px solid var(--line-2);background:var(--card-2);color:var(--ink-soft);
-    padding:9px 13px;border-radius:20px;font-size:14px;cursor:pointer;
-    font-family:inherit;
+    border:1px solid var(--line-2);background:var(--card-2);color:var(--ink-2);
+    padding:9px 14px;border-radius:99px;font-size:14px;cursor:pointer;
+    font-family:inherit;transition:all .14s;
   }
+  .chip:hover{border-color:var(--ink-3);color:var(--ink);}
   .chip[aria-pressed=true]{
-    border-color:var(--accent);background:rgba(232,114,44,.14);color:var(--accent-ink);
+    border-color:var(--amber);background:var(--amber-dim);color:var(--amber-2);font-weight:600;
   }
 
-  button.primary{
-    width:100%;background:var(--accent);color:#241005;border:none;
-    border-radius:9px;padding:15px;font-size:16px;font-weight:650;
-    cursor:pointer;font-family:inherit;
-  }
-  button.primary:disabled{opacity:.45;cursor:not-allowed;}
-  button.ghost{
-    width:100%;background:transparent;color:var(--ink-soft);
-    border:1px solid var(--line-2);border-radius:9px;padding:13px;
-    font-size:15px;cursor:pointer;font-family:inherit;margin-top:9px;
-  }
+  .steps{display:flex;gap:5px;margin-bottom:18px;}
+  .steps i{height:3px;flex:1;background:var(--line);border-radius:2px;transition:background .3s;}
+  .steps i.on{background:var(--amber);}
 
-  .tips{list-style:none;padding:0;margin:0 0 16px;}
-  .tips li{
-    display:flex;gap:9px;font-size:14px;color:var(--ink-soft);
-    padding:7px 0;border-bottom:1px solid var(--line);
+  /* ---------- рекордер ---------- */
+  .safety{
+    background:var(--red-dim);border:1px solid rgba(226,99,92,.3);border-radius:11px;
+    padding:13px 15px;font-size:13.8px;color:var(--ink-2);margin-bottom:16px;
   }
+  .safety b{color:var(--red);}
+  .tips{list-style:none;padding:0;margin:0 0 18px;}
+  .tips li{display:flex;gap:10px;font-size:14.3px;color:var(--ink-2);padding:8px 0;border-bottom:1px solid var(--line);}
   .tips li:last-child{border:none;}
-  .tips b{color:var(--ink);font-weight:600;}
-  .tips .n{color:var(--accent);font-family:var(--mono);font-size:12px;padding-top:2px;}
+  .tips b{color:var(--ink);font-weight:620;}
+  .tips i{color:var(--amber);font-family:var(--mono);font-size:11.5px;font-style:normal;padding-top:3px;}
 
-  .danger{
-    background:rgba(217,83,79,.12);border:1px solid rgba(217,83,79,.4);
-    border-radius:9px;padding:12px 14px;font-size:13.5px;color:#f2c3c0;
-    margin-bottom:16px;
+  .rec{text-align:center;padding:6px 0 2px;}
+  .meter{height:56px;display:flex;align-items:flex-end;justify-content:center;gap:3px;margin-bottom:14px;}
+  .meter span{width:4px;background:var(--line-2);border-radius:2px;height:5px;transition:height .07s linear,background .07s;}
+  .timer{font-family:var(--mono);font-size:38px;font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin-bottom:4px;}
+  .timer.on{color:var(--amber);}
+  .livehint{font-size:13.5px;color:var(--ink-3);min-height:21px;margin:0 0 16px;}
+
+  /* ---------- результат ---------- */
+  .verdict{border-radius:12px;padding:19px;margin-bottom:15px;border:1px solid var(--line-2);background:var(--card-2);}
+  .verdict.fault{border-color:rgba(223,169,58,.42);background:var(--yellow-dim);}
+  .verdict.normal{border-color:rgba(63,184,122,.42);background:var(--green-dim);}
+  .verdict h3{margin:0 0 8px;font-size:19.5px;font-weight:690;letter-spacing:-.02em;text-wrap:balance;}
+  .badge{
+    display:inline-block;font-size:12px;padding:3px 10px;border-radius:6px;
+    background:rgba(255,255,255,.07);color:var(--ink-2);margin-bottom:9px;font-weight:560;
+  }
+  @media (prefers-color-scheme:light){.badge{background:rgba(20,30,25,.06);}}
+  .verdict p{font-size:14px;color:var(--ink-2);margin:0;}
+
+  .kv{display:flex;align-items:baseline;gap:10px;padding:14px 0;border-bottom:1px solid var(--line);margin-bottom:14px;}
+  .kv .k{font-size:13px;color:var(--ink-3);}
+  .kv .v{font-size:18px;font-weight:660;letter-spacing:-.02em;}
+
+  .mech-hd{display:flex;align-items:center;gap:9px;margin-bottom:12px;}
+  .mech-hd .ic{
+    width:28px;height:28px;border-radius:8px;background:var(--amber-dim);
+    border:1px solid rgba(240,135,46,.25);display:grid;place-items:center;flex:none;
+  }
+  .mech-hd .ic svg{width:15px;height:15px;color:var(--amber);}
+  .mech-hd h2{margin:0;font-size:17px;}
+  .mech-hd .who{font-size:12px;color:var(--ink-3);}
+
+  .reason{
+    font-size:15px;color:var(--ink-2);background:var(--card-2);border-left:2px solid var(--amber);
+    padding:12px 15px;border-radius:0 9px 9px 0;margin:0 0 16px;
   }
 
-  /* recorder */
-  .rec-wrap{text-align:center;padding:8px 0 4px;}
-  .meter{
-    height:52px;display:flex;align-items:flex-end;justify-content:center;
-    gap:3px;margin-bottom:16px;
-  }
-  .meter span{
-    width:4px;background:var(--line-2);border-radius:2px;height:5px;
-    transition:height .07s linear,background .07s;
-  }
-  .timer{
-    font-family:var(--mono);font-size:34px;font-variant-numeric:tabular-nums;
-    margin-bottom:5px;
-  }
-  .timer.rec{color:var(--accent);}
-  .hint-live{font-size:13.5px;color:var(--ink-faint);min-height:20px;margin-bottom:16px;}
+  .part{border:1px solid var(--line);border-radius:11px;padding:14px 15px;margin-bottom:10px;background:var(--card-2);}
+  .part-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+  .part-name{font-weight:650;font-size:15.5px;letter-spacing:-.01em;}
+  .lk{font-size:11px;padding:2.5px 8px;border-radius:5px;font-weight:640;text-transform:lowercase;}
+  .lk.высокая{background:var(--red-dim);color:var(--red);}
+  .lk.средняя{background:var(--yellow-dim);color:var(--yellow);}
+  .lk.низкая{background:rgba(255,255,255,.06);color:var(--ink-3);}
+  @media (prefers-color-scheme:light){.lk.низкая{background:rgba(20,30,25,.05);}}
+  .part p{font-size:14px;color:var(--ink-2);margin:0 0 7px;}
+  .part .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink-3);padding-top:8px;border-top:1px solid var(--line);}
+  .part .meta b{color:var(--ink-2);font-weight:600;}
+  .price{font-family:var(--mono);font-size:13px;color:var(--green);font-weight:600;}
 
-  /* result */
-  .verdict{
-    border-radius:11px;padding:18px;margin-bottom:15px;border:1px solid var(--line-2);
-    background:var(--card-2);
-  }
-  .verdict.fault{border-color:rgba(214,160,40,.5);background:rgba(214,160,40,.09);}
-  .verdict.normal{border-color:rgba(63,169,107,.5);background:rgba(63,169,107,.09);}
-  .verdict.uncertain{border-color:var(--line-2);}
-  .verdict h3{margin:0 0 7px;font-size:18px;font-weight:650;}
-  .band{
-    display:inline-block;font-size:12px;padding:3px 9px;border-radius:5px;
-    background:rgba(255,255,255,.07);color:var(--ink-soft);margin-bottom:8px;
-  }
-  .band-gloss{font-size:13.5px;color:var(--ink-soft);margin:0;}
+  .ulist{margin:0;padding-left:20px;}
+  .ulist li{font-size:14.5px;margin-bottom:8px;color:var(--ink-2);}
+  .ulist li::marker{color:var(--amber);}
 
-  .zone-line{
-    display:flex;align-items:baseline;gap:9px;padding:13px 0;
-    border-bottom:1px solid var(--line);margin-bottom:13px;
-  }
-  .zone-line .lbl{font-size:13px;color:var(--ink-faint);}
-  .zone-line .val{font-size:17px;font-weight:600;}
+  .urg{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:620;padding:8px 13px;border-radius:9px;margin-bottom:13px;}
+  .urg.critical{background:var(--red-dim);color:var(--red);}
+  .urg.high{background:var(--yellow-dim);color:var(--yellow);}
+  .urg.medium{background:rgba(255,255,255,.06);color:var(--ink-2);}
+  .urg.low{background:var(--green-dim);color:var(--green);}
+  @media (prefers-color-scheme:light){.urg.medium{background:rgba(20,30,25,.05);}}
 
-  .ver{
-    border:1px solid var(--line);border-radius:9px;padding:13px 14px;
-    margin-bottom:9px;background:var(--card-2);
-  }
-  .ver-hd{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;}
-  .ver-name{font-weight:600;font-size:15.5px;}
-  .u{font-size:11px;padding:2px 7px;border-radius:4px;font-weight:600;}
-  .u.critical{background:rgba(217,83,79,.2);color:#f0a9a5;}
-  .u.high{background:rgba(214,160,40,.2);color:#e8cb8a;}
-  .u.medium{background:rgba(255,255,255,.08);color:var(--ink-soft);}
-  .u.low{background:rgba(255,255,255,.06);color:var(--ink-faint);}
-  .ver-hint{font-size:13.5px;color:var(--ink-soft);margin:0;}
-  .ver-zone{font-size:12px;color:var(--ink-faint);}
+  .note{font-size:13px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:13px;margin-top:14px;}
+  details{margin-top:12px;}
+  summary{font-size:13px;color:var(--ink-3);cursor:pointer;user-select:none;}
+  summary:hover{color:var(--ink-2);}
+  pre{background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:12px;overflow-x:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);margin:10px 0 0;}
 
-  .steps-list{margin:0;padding-left:19px;}
-  .steps-list li{font-size:14.5px;margin-bottom:8px;color:var(--ink);}
+  .mdiag{font-size:16.5px;font-weight:620;margin:0 0 12px;letter-spacing:-.01em;}
+  .mech-in{animation:fade .35s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .skel{
+    height:13px;border-radius:6px;margin-bottom:10px;
+    background:linear-gradient(90deg,var(--card-2) 25%,var(--line) 50%,var(--card-2) 75%);
+    background-size:200% 100%;animation:shim 1.4s ease-in-out infinite;
+  }
+  .skel.short{width:62%;}
+  @keyframes shim{to{background-position:-200% 0}}
 
-  .disclaimer{
-    font-size:12.5px;color:var(--ink-faint);border-top:1px solid var(--line);
-    padding-top:13px;margin-top:5px;
-  }
-  details{margin-top:13px;}
-  summary{font-size:13px;color:var(--ink-faint);cursor:pointer;}
-  pre{
-    background:#0a0d0b;border:1px solid var(--line);border-radius:7px;
-    padding:11px;overflow-x:auto;font-family:var(--mono);font-size:11.5px;
-    color:var(--ink-soft);margin:9px 0 0;
-  }
-  .consent{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--ink-soft);margin-bottom:14px;}
-  .consent input{margin:2px 0 0;flex:none;width:16px;height:16px;}
-  .err{color:#f0a9a5;font-size:14px;margin-bottom:12px;}
-  .hidden{display:none;}
-  .spin{
-    width:26px;height:26px;border:2.5px solid var(--line-2);border-top-color:var(--accent);
-    border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 13px;
-  }
+  .spin{width:28px;height:28px;border:2.5px solid var(--line-2);border-top-color:var(--amber);border-radius:50%;animation:sp .75s linear infinite;margin:0 auto 15px;}
   @keyframes sp{to{transform:rotate(360deg)}}
-  @media (prefers-reduced-motion:reduce){.spin{animation:none}*{transition:none!important}}
+  .load-step{font-size:14px;color:var(--ink-3);text-align:center;margin:0;transition:color .3s;}
+  .load-step.on{color:var(--amber);}
+
+  .or{display:flex;align-items:center;gap:12px;margin:14px 0;color:var(--ink-3);font-size:13px;}
+  .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line);}
+  .upload{
+    display:flex;align-items:center;justify-content:center;gap:9px;width:100%;
+    border:1px dashed var(--line-2);border-radius:12px;padding:15px;cursor:pointer;
+    color:var(--ink-2);font-size:15px;font-weight:600;margin:0;transition:all .15s;
+  }
+  .upload:hover{border-color:var(--amber);color:var(--amber);}
+  .upload svg{width:17px;height:17px;}
+
+  .err{color:var(--red);font-size:14px;margin-bottom:12px;}
+  .hidden{display:none!important;}
+  footer{padding:30px 0;border-top:1px solid var(--line);margin-top:24px;font-size:12.5px;color:var(--ink-3);text-align:center;}
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <div class="logo">
-      <span class="logo-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#241005" stroke-width="2.4"
-             stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12h2l2-5h10l2 5h2"/><circle cx="7.5" cy="15.5" r="1.8"/>
-          <circle cx="16.5" cy="15.5" r="1.8"/><path d="M5 12v3.5M19 12v3.5"/>
-        </svg>
-      </span>
-      <div>
-        <h1>Диагностика по звуку</h1>
-        <p class="tagline">Запишите звук — подскажем, где искать причину</p>
-      </div>
-    </div>
-  </header>
-
-  <div class="steps" aria-hidden="true">
-    <i class="on" id="s1"></i><i id="s2"></i><i id="s3"></i><i id="s4"></i>
+<div class="top">
+  <div class="top-in">
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1c0d02" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12h2l2-5h10l2 5h2"/><circle cx="7.5" cy="15.5" r="1.7"/><circle cx="16.5" cy="15.5" r="1.7"/>
+      </svg>
+    </span>
+    <span class="brand">Что стучит</span>
+    <button class="cta-mini" data-go="wiz">Проверить</button>
   </div>
-
-  <!-- 1. Машина -->
-  <section class="card" id="step-car">
-    <h2>Что за машина</h2>
-    <p class="sub">Марка помогает нам улучшать модель под российский автопарк.</p>
-    <div class="row">
-      <div><label for="brand">Марка</label><input type="text" id="brand" placeholder="Lada" autocomplete="off"></div>
-      <div><label for="model">Модель</label><input type="text" id="model" placeholder="Granta" autocomplete="off"></div>
-    </div>
-    <div class="row">
-      <div><label for="year">Год</label><input type="number" id="year" placeholder="2015" min="1950" max="2030"></div>
-      <div><label for="mileage">Пробег, км</label><input type="number" id="mileage" placeholder="150000" min="0"></div>
-    </div>
-    <button class="primary" id="to-symptom">Дальше</button>
-  </section>
-
-  <!-- 2. Симптом -->
-  <section class="card hidden" id="step-symptom">
-    <h2>Когда слышно звук</h2>
-    <p class="sub">Выберите момент, в который звук проявляется сильнее всего — записывать будем именно его.</p>
-    <div class="chips" id="chips">
-      <button class="chip" aria-pressed="false" data-v="idle">На холостых</button>
-      <button class="chip" aria-pressed="false" data-v="cold">На холодную</button>
-      <button class="chip" aria-pressed="false" data-v="rev">При газовке</button>
-      <button class="chip" aria-pressed="false" data-v="brake">При торможении</button>
-      <button class="chip" aria-pressed="false" data-v="turn">При повороте</button>
-      <button class="chip" aria-pressed="false" data-v="bumps">На неровностях</button>
-      <button class="chip" aria-pressed="false" data-v="speed">С ростом скорости</button>
-    </div>
-    <label for="note">Что именно слышите (необязательно)</label>
-    <textarea id="note" placeholder="Ровное цоканье, громче на холодную"></textarea>
-    <button class="primary" id="to-record">Дальше</button>
-    <button class="ghost" data-back="step-car">Назад</button>
-  </section>
-
-  <!-- 3. Запись -->
-  <section class="card hidden" id="step-record">
-    <h2>Запись звука</h2>
-    <p class="sub">От качества записи зависит всё. Пятнадцати секунд достаточно.</p>
-
-    <div class="danger">
-      <b>Безопасность.</b> Под капотом работающего двигателя вращаются вентилятор,
-      ремни и шкивы. Не подносите руки и одежду, записывайте сбоку, а не сверху.
-    </div>
-
-    <ul class="tips">
-      <li><span class="n">1</span><span>Прогрейте двигатель, если проблема не только на холодную</span></li>
-      <li><span class="n">2</span><span>Выключите музыку, климат и обдув</span></li>
-      <li><span class="n">3</span><span>Держите телефон в <b>20–30 см</b> от источника звука</span></li>
-      <li><span class="n">4</span><span>Не комментируйте вслух — речь мы вырезаем</span></li>
-      <li><span class="n">5</span><span>Записывайте на стоянке: в движении шум дороги перебивает дефект</span></li>
-    </ul>
-
-    <div class="rec-wrap">
-      <div class="meter" id="meter" aria-hidden="true"></div>
-      <div class="timer" id="timer">00:15</div>
-      <p class="hint-live" id="live-hint">Нажмите, чтобы начать запись</p>
-    </div>
-
-    <p class="err hidden" id="rec-err"></p>
-    <button class="primary" id="rec-btn">Начать запись</button>
-    <button class="ghost" data-back="step-symptom">Назад</button>
-  </section>
-
-  <!-- 4. Анализ -->
-  <section class="card hidden" id="step-loading">
-    <div class="spin"></div>
-    <h2 style="text-align:center">Слушаем запись</h2>
-    <p class="sub" style="text-align:center">Отделяем механический звук от фона</p>
-  </section>
-
-  <!-- 5. Результат -->
-  <section class="hidden" id="step-result"></section>
-
 </div>
+
+<main>
+<!-- ========== ЛЕНДИНГ ========== -->
+<div id="landing">
+  <div class="wrap">
+    <section class="hero">
+      <span class="kicker"><i class="pulse"></i>Работает без адаптеров и проводов</span>
+      <h1>В машине что-то <em>стучит</em>. Разберёмся, что именно</h1>
+      <p class="lede">Запишите звук на телефон. Акустическая модель определит зону, а ИИ-механик назовёт вероятные узлы и порядок цен.</p>
+      <button class="btn" data-go="wiz">Записать звук</button>
+      <div class="under-cta">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Бесплатно</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Без установки</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Минута времени</span>
+      </div>
+    </section>
+
+    <section class="blk">
+      <h2>Как это работает</h2>
+      <p class="sub">Два разных механизма смотрят на одну запись.</p>
+      <div class="flow">
+        <div class="fstep"><span class="fnum">1</span><div>
+          <h3>Вы записываете звук</h3>
+          <p>15 секунд на холостых оборотах. Прямо в браузере, ставить ничего не нужно.</p></div></div>
+        <div class="fstep"><span class="fnum">2</span><div>
+          <h3>Модель слушает и чистит</h3>
+          <p>Отделяет механический звук от речи, музыки и шума, потом определяет зону: двигатель, подвеска, тормоза, трансмиссия.</p></div></div>
+        <div class="fstep"><span class="fnum">3</span><div>
+          <h3>ИИ-механик разбирает случай</h3>
+          <p>Добавляет к выводу модели вашу марку, пробег и описание симптома — и называет конкретные узлы с порядком цен.</p></div></div>
+      </div>
+    </section>
+
+    <section class="blk">
+      <div class="honest">
+        <h2>Честно о пределах</h2>
+        <p>Мы <b>не обещаем 98% точности</b>, как это делают похожие сервисы. Звук — сильная улика, но не диагноз.</p>
+        <p>Зону модель определяет надёжно: правильная попадает в тройку примерно в <b>75% случаев</b>. Конкретную деталь по звуку определить труднее, поэтому её называет ИИ-механик, опираясь ещё и на пробег с симптомом.</p>
+        <p>Когда улик мало, сервис прямо говорит <b>«не берусь судить»</b> вместо того, чтобы придумать ответ. Это не поломка, а осознанное решение: неверный диагноз стоит дороже честного «не знаю».</p>
+      </div>
+    </section>
+
+    <section class="blk">
+      <h2>Что можно услышать</h2>
+      <p class="sub">Механические звуки часто не дают кода ошибки — обычный OBD2-сканер их не увидит.</p>
+      <div class="flow">
+        <div class="fstep"><span class="fnum">Д</span><div><h3>Двигатель</h3><p>Цоканье клапанов, стук вкладышей, вой помпы или турбины, свист ремня.</p></div></div>
+        <div class="fstep"><span class="fnum">П</span><div><h3>Подвеска и рулевое</h3><p>Стук стоек и сайлентблоков на неровностях, вой гидроусилителя.</p></div></div>
+        <div class="fstep"><span class="fnum">Т</span><div><h3>Тормоза и колёса</h3><p>Скрежет колодок, гул ступичного подшипника, растущий со скоростью.</p></div></div>
+        <div class="fstep"><span class="fnum">К</span><div><h3>Трансмиссия</h3><p>Хруст ШРУСа в повороте, вой редуктора, удары при переключении.</p></div></div>
+      </div>
+      <button class="btn" style="margin-top:20px" data-go="wiz">Записать звук своей машины</button>
+    </section>
+  </div>
+</div>
+
+<!-- ========== МАСТЕР ========== -->
+<div id="wiz" class="hidden">
+  <div class="wrap narrow" style="padding-top:26px">
+    <div class="steps" aria-hidden="true"><i class="on" id="s1"></i><i id="s2"></i><i id="s3"></i><i id="s4"></i></div>
+
+    <section class="card" id="step-car">
+      <h2>Что за машина</h2>
+      <p class="sub">Пробег и марка сильно сужают круг причин — механик опирается на них не меньше, чем на звук.</p>
+      <div class="row">
+        <div><label for="brand">Марка</label><input id="brand" placeholder="Lada" autocomplete="off"></div>
+        <div><label for="model">Модель</label><input id="model" placeholder="Granta" autocomplete="off"></div>
+      </div>
+      <div class="row">
+        <div><label for="year">Год</label><input id="year" type="number" placeholder="2015" min="1950" max="2030"></div>
+        <div><label for="mileage">Пробег, км</label><input id="mileage" type="number" placeholder="150000" min="0"></div>
+      </div>
+      <button class="btn" data-next="step-symptom">Дальше</button>
+    </section>
+
+    <section class="card hidden" id="step-symptom">
+      <h2>Когда слышно звук</h2>
+      <p class="sub">Выберите всё, что подходит. Момент появления звука — главная улика после самого звука.</p>
+      <div class="chips" id="chips">
+        <button class="chip" aria-pressed="false" data-v="на холостых">На холостых</button>
+        <button class="chip" aria-pressed="false" data-v="на холодную">На холодную</button>
+        <button class="chip" aria-pressed="false" data-v="при газовке">При газовке</button>
+        <button class="chip" aria-pressed="false" data-v="под нагрузкой">Под нагрузкой</button>
+        <button class="chip" aria-pressed="false" data-v="при торможении">При торможении</button>
+        <button class="chip" aria-pressed="false" data-v="в повороте">В повороте</button>
+        <button class="chip" aria-pressed="false" data-v="на неровностях">На неровностях</button>
+        <button class="chip" aria-pressed="false" data-v="растёт со скоростью">Растёт со скоростью</button>
+      </div>
+      <label for="note">Опишите звук своими словами</label>
+      <textarea id="note" placeholder="Ровное цоканье, будто швейная машинка. Под нагрузкой тише."></textarea>
+      <button class="btn" data-next="step-record">Дальше</button>
+      <button class="btn sec" data-next="step-car">Назад</button>
+    </section>
+
+    <section class="card hidden" id="step-record">
+      <h2>Запись звука</h2>
+      <p class="sub">От качества записи зависит результат. Пятнадцати секунд достаточно.</p>
+      <div class="safety"><b>Осторожно.</b> Под капотом работающего двигателя вращаются вентилятор, ремни и шкивы. Не подносите руки и одежду, записывайте сбоку, а не сверху.</div>
+      <ul class="tips">
+        <li><i>01</i><span>Прогрейте двигатель, если звук не только на холодную</span></li>
+        <li><i>02</i><span>Выключите музыку, климат и обдув</span></li>
+        <li><i>03</i><span>Держите телефон в <b>20–30 см</b> от источника</span></li>
+        <li><i>04</i><span>Молча — речь мы всё равно вырезаем</span></li>
+        <li><i>05</i><span>На стоянке, а не в движении: шум дороги перебьёт дефект</span></li>
+      </ul>
+      <div class="rec">
+        <div class="meter" id="meter" aria-hidden="true"></div>
+        <div class="timer" id="timer">00:15</div>
+        <p class="livehint" id="livehint">Нажмите, чтобы начать</p>
+      </div>
+      <p class="err hidden" id="recerr"></p>
+      <button class="btn" id="recbtn">Начать запись</button>
+      <div class="or"><span>или</span></div>
+      <label class="upload" for="file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+        Загрузить готовую запись
+      </label>
+      <input type="file" id="file" accept="audio/*,video/*" hidden>
+      <button class="btn sec" data-next="step-symptom">Назад</button>
+    </section>
+
+    <section class="card hidden" id="step-loading">
+      <div class="spin"></div>
+      <p class="load-step on" id="l1">Отделяем механический звук от фона</p>
+      <p class="load-step" id="l2">Определяем зону неисправности</p>
+      <p class="load-step" id="l3">Механик разбирает случай</p>
+    </section>
+
+    <section class="hidden" id="step-result"></section>
+  </div>
+</div>
+</main>
+
+<footer><div class="wrap">Предварительная подсказка по звуку. Не заменяет осмотр специалиста.</div></footer>
 
 <script>
 (() => {
   "use strict";
-
   const $ = id => document.getElementById(id);
-  const state = { symptom: [], blob: null };
-  const RECORD_SECONDS = 15;
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
-  /* ---------- навигация ---------- */
+  const RECORD_SECONDS = 15;
+  const state = { symptom: [], blob: null };
   const STEPS = ["step-car","step-symptom","step-record","step-loading","step-result"];
+  const PROGRESS = { "step-car":1, "step-symptom":2, "step-record":3, "step-loading":4, "step-result":4 };
+
   function show(id){
     STEPS.forEach(s => $(s).classList.toggle("hidden", s !== id));
-    const n = { "step-car":1, "step-symptom":2, "step-record":3, "step-loading":4, "step-result":4 }[id];
+    const n = PROGRESS[id];
     [1,2,3,4].forEach(i => $("s"+i).classList.toggle("on", i <= n));
     window.scrollTo({ top:0, behavior:"smooth" });
   }
-  document.querySelectorAll("[data-back]").forEach(b =>
-    b.addEventListener("click", () => show(b.dataset.back)));
 
-  $("to-symptom").addEventListener("click", () => show("step-symptom"));
-  $("to-record").addEventListener("click", () => show("step-record"));
+  document.querySelectorAll("[data-go=wiz]").forEach(b => b.addEventListener("click", () => {
+    $("landing").classList.add("hidden");
+    $("wiz").classList.remove("hidden");
+    show("step-car");
+  }));
+  document.querySelectorAll("[data-next]").forEach(b =>
+    b.addEventListener("click", () => show(b.dataset.next)));
 
-  /* ---------- симптомы ---------- */
   $("chips").addEventListener("click", e => {
-    const chip = e.target.closest(".chip");
-    if (!chip) return;
-    const on = chip.getAttribute("aria-pressed") === "true";
-    chip.setAttribute("aria-pressed", String(!on));
-    state.symptom = [...document.querySelectorAll('.chip[aria-pressed="true"]')]
-      .map(c => c.dataset.v);
+    const c = e.target.closest(".chip");
+    if (!c) return;
+    c.setAttribute("aria-pressed", String(c.getAttribute("aria-pressed") !== "true"));
+    state.symptom = [...document.querySelectorAll('.chip[aria-pressed="true"]')].map(x => x.dataset.v);
   });
 
-  /* ---------- запись ---------- */
+  /* ---------- рекордер ---------- */
   const meter = $("meter");
-  for (let i = 0; i < 28; i++) meter.appendChild(document.createElement("span"));
+  for (let i = 0; i < 30; i++) meter.appendChild(document.createElement("span"));
   const bars = [...meter.children];
+  let media, recorder, chunks = [], ac, analyser, raf, ticker;
 
-  let media, recorder, chunks = [], audioCtx, analyser, rafId, ticker;
+  const fmt = s => "00:" + String(Math.max(0, s)).padStart(2, "0");
 
-  function fmt(s){ return "00:" + String(Math.max(0, s)).padStart(2, "0"); }
-
-  function drawLevel(){
+  function level(){
     const buf = new Uint8Array(analyser.frequencyBinCount);
     analyser.getByteFrequencyData(buf);
     const step = Math.floor(buf.length / bars.length);
     let peak = 0;
-    bars.forEach((bar, i) => {
+    bars.forEach((b, i) => {
       let v = 0;
       for (let k = 0; k < step; k++) v = Math.max(v, buf[i*step + k]);
       peak = Math.max(peak, v);
-      const h = 5 + (v / 255) * 44;
-      bar.style.height = h.toFixed(0) + "px";
-      bar.style.background = v > 200 ? "var(--crit)" : v > 40 ? "var(--accent)" : "var(--line-2)";
+      b.style.height = (5 + (v/255)*48).toFixed(0) + "px";
+      b.style.background = v > 205 ? "var(--red)" : v > 38 ? "var(--amber)" : "var(--line-2)";
     });
-    const hint = $("live-hint");
-    if (peak < 25) hint.textContent = "Слишком тихо — поднесите телефон ближе";
-    else if (peak > 235) hint.textContent = "Перегрузка — отодвиньте телефон";
-    else hint.textContent = "Уровень в норме";
-    rafId = requestAnimationFrame(drawLevel);
+    $("livehint").textContent = peak < 25 ? "Слишком тихо — поднесите телефон ближе"
+      : peak > 238 ? "Перегрузка — отодвиньте телефон" : "Уровень в норме";
+    raf = requestAnimationFrame(level);
   }
 
-  async function startRecording(){
-    $("rec-err").classList.add("hidden");
+  async function start(){
+    $("recerr").classList.add("hidden");
     try {
       // Браузерная обработка настроена под речь: шумоподавление и автоусиление
-      // срежут ровно тот механический звук, который мы хотим услышать.
-      media = await navigator.mediaDevices.getUserMedia({ audio: {
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false,
-        channelCount: 1
-      }});
+      // срежут ровно тот механический звук, ради которого всё затевается.
+      media = await navigator.mediaDevices.getUserMedia({ audio:{
+        echoCancellation:false, noiseSuppression:false, autoGainControl:false, channelCount:1 }});
     } catch (err) {
-      const e = $("rec-err");
-      e.textContent = err && err.name === "NotAllowedError"
+      const e = $("recerr");
+      e.textContent = err?.name === "NotAllowedError"
         ? "Нет доступа к микрофону. Разрешите запись в настройках браузера."
-        : "Микрофон недоступен: " + (err && err.message ? err.message : err);
+        : (location.protocol !== "https:" && location.hostname !== "localhost")
+        ? "Запись работает только по HTTPS."
+        : "Микрофон недоступен: " + (err?.message || err);
       e.classList.remove("hidden");
       return;
     }
-
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    audioCtx.createMediaStreamSource(media).connect(analyser);
-    drawLevel();
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = ac.createAnalyser(); analyser.fftSize = 256;
+    ac.createMediaStreamSource(media).connect(analyser);
+    level();
 
     chunks = [];
     recorder = new MediaRecorder(media);
-    recorder.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data); };
+    recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
     recorder.onstop = () => {
       state.blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-      cleanup();
-      send();
+      cleanup(); send();
     };
     recorder.start();
 
     let left = RECORD_SECONDS;
     $("timer").textContent = fmt(left);
-    $("timer").classList.add("rec");
-    $("rec-btn").textContent = "Остановить";
-    ticker = setInterval(() => {
-      left -= 1;
-      $("timer").textContent = fmt(left);
-      if (left <= 0) stopRecording();
-    }, 1000);
+    $("timer").classList.add("on");
+    $("recbtn").textContent = "Остановить";
+    ticker = setInterval(() => { if (--left <= 0) stop(); $("timer").textContent = fmt(left); }, 1000);
   }
 
-  function stopRecording(){
-    clearInterval(ticker);
-    if (recorder && recorder.state !== "inactive") recorder.stop();
-  }
+  function stop(){ clearInterval(ticker); if (recorder?.state !== "inactive") recorder.stop(); }
 
   function cleanup(){
-    cancelAnimationFrame(rafId);
-    clearInterval(ticker);
-    if (media) media.getTracks().forEach(t => t.stop());
-    if (audioCtx) audioCtx.close();
+    cancelAnimationFrame(raf); clearInterval(ticker);
+    media?.getTracks().forEach(t => t.stop());
+    ac?.close();
     bars.forEach(b => { b.style.height = "5px"; b.style.background = "var(--line-2)"; });
-    $("timer").classList.remove("rec");
-    $("rec-btn").textContent = "Начать запись";
+    $("timer").classList.remove("on");
+    $("recbtn").textContent = "Начать запись";
   }
 
-  $("rec-btn").addEventListener("click", () => {
-    if (recorder && recorder.state === "recording") stopRecording();
-    else startRecording();
+  $("recbtn").addEventListener("click", () => recorder?.state === "recording" ? stop() : start());
+
+  // Запасной путь: браузер мог не дать микрофон, или запись уже есть на диске.
+  // Без него часть людей упирается в тупик прямо перед результатом.
+  $("file").addEventListener("change", e => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 25 * 1024 * 1024) {
+      const err = $("recerr");
+      err.textContent = "Файл больше 25 МБ. Обрежьте запись до 30 секунд.";
+      err.classList.remove("hidden");
+      return;
+    }
+    state.blob = f;
+    send();
   });
 
   /* ---------- отправка ---------- */
   async function send(){
     show("step-loading");
+    const t = setTimeout(() => {
+      document.querySelectorAll(".load-step").forEach(p => p.classList.remove("on"));
+      $("l2").classList.add("on");
+    }, 1400);
+
     const fd = new FormData();
-    fd.append("audio", state.blob, "recording.webm");
-    fd.append("brand", $("brand").value);
-    fd.append("model", $("model").value);
-    fd.append("year", $("year").value);
-    fd.append("mileage", $("mileage").value);
-    fd.append("symptom", state.symptom.join(",") + "|" + $("note").value);
+    fd.append("audio", state.blob, "rec.webm");
+    ["brand","model","year","mileage"].forEach(k => fd.append(k, $(k).value));
+    fd.append("symptom", [state.symptom.join(", "), $("note").value].filter(Boolean).join(". "));
     fd.append("consent_training", "true");
 
     try {
-      const res = await fetch("/api/analyse", { method:"POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Ошибка анализа");
-      render(data);
+      const res = await fetch("/api/analyse", { method:"POST", body:fd });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || "Не удалось проанализировать");
+      clearTimeout(t);
+      render(d);
+      // Вердикт уже на экране. Разбор механиком думает около двенадцати секунд,
+      // поэтому подгружаем его отдельно, а не держим ради него весь ответ.
+      if (d.mechanic_pending) loadMechanic(d.id);
     } catch (err) {
-      $("step-result").innerHTML =
-        '<div class="card"><h2>Не получилось</h2>' +
-        '<p class="sub">' + esc(err.message) + '</p>' +
-        '<button class="primary" onclick="location.reload()">Попробовать снова</button></div>';
+      clearTimeout(t);
+      $("step-result").innerHTML = `<div class="card"><h2>Не получилось</h2>
+        <p class="sub">${esc(err.message)}</p>
+        <button class="btn" onclick="location.reload()">Попробовать снова</button></div>`;
       show("step-result");
     }
   }
 
-  const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
-    c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  async function loadMechanic(id){
+    const slot = $("mech-slot");
+    if (!slot) return;
+    try {
+      const fd = new FormData();
+      fd.append("rec_id", id);
+      const res = await fetch("/api/mechanic", { method:"POST", body:fd });
+      const m = await res.json();
+      slot.innerHTML = res.ok && m.ok ? mechanicHtml(m) : "";
+    } catch { slot.innerHTML = ""; }
+  }
 
   /* ---------- результат ---------- */
-  function render(d){
-    const versions = (d.versions || []).filter(v => !d.conflict || v.agrees_with_zone);
-    const showVersions = d.status === "fault" && versions.length;
-
-    const versionsHtml = showVersions ? versions.slice(0,3).map(v => `
-      <div class="ver">
-        <div class="ver-hd">
-          <span class="ver-name">${esc(v.name)}</span>
-          <span class="u ${esc(v.urgency)}">${esc(v.urgency_name)}</span>
+  function mechanicHtml(m){
+    const parts = (m.parts || []).map(p => `
+      <div class="part">
+        <div class="part-hd">
+          <span class="part-name">${esc(p.name)}</span>
+          ${p.likelihood ? `<span class="lk ${esc(p.likelihood)}">${esc(p.likelihood)}</span>` : ""}
         </div>
-        <span class="ver-zone">${esc(v.zone_name)}</span>
-        <p class="ver-hint">${esc(v.hint)}</p>
-      </div>`).join("") : "";
+        ${p.why ? `<p>${esc(p.why)}</p>` : ""}
+        <div class="meta">
+          ${p.check ? `<span><b>Проверить:</b> ${esc(p.check)}</span>` : ""}
+          ${p.cost_rub ? `<span class="price">${esc(p.cost_rub)} ₽</span>` : ""}
+        </div>
+      </div>`).join("");
+
+    return `<div class="card mech-in">
+      <div class="mech-hd">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a5 5 0 01-6.4 6.4L4 17v3h3l4.3-4.3a5 5 0 006.4-6.4l-2.8 2.8-2.1-2.1z"/></svg></span>
+        <div><h2>Разбор механика</h2><span class="who">С учётом марки, пробега и симптома</span></div>
+      </div>
+      ${m.diagnosis ? `<p class="mdiag">${esc(m.diagnosis)}</p>` : ""}
+      ${m.reasoning ? `<p class="reason">${esc(m.reasoning)}</p>` : ""}
+      ${m.urgency ? `<span class="urg ${esc(m.urgency)}">${esc(m.urgency_why || m.urgency)}</span>` : ""}
+      ${parts}
+      ${(m.diy_checks || []).length ? `<p class="sub" style="margin:16px 0 8px">Что проверить самому</p>
+        <ul class="ulist">${m.diy_checks.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${(m.questions || []).length ? `<p class="sub" style="margin:16px 0 8px">Это сузило бы поиск</p>
+        <ul class="ulist">${m.questions.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+      ${m.confidence_note ? `<p class="note">${esc(m.confidence_note)}</p>` : ""}
+    </div>`;
+  }
+
+  function render(d){
+    const mechBlock = d.mechanic_pending ? `
+      <div class="card" id="mech-wait">
+        <div class="mech-hd">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a5 5 0 01-6.4 6.4L4 17v3h3l4.3-4.3a5 5 0 006.4-6.4l-2.8 2.8-2.1-2.1z"/></svg></span>
+          <div><h2>Механик изучает случай</h2><span class="who">Сверяет звук с типовыми болячками вашей марки</span></div>
+        </div>
+        <div class="skel"></div><div class="skel"></div><div class="skel short"></div>
+      </div>` : "";
 
     $("step-result").innerHTML = `
       <div class="card">
         <div class="verdict ${esc(d.status)}">
           <h3>${esc(d.headline)}</h3>
-          <span class="band">${esc(d.band_name)}</span>
-          <p class="band-gloss">${esc(d.band_gloss)}</p>
+          <span class="badge">${esc(d.band_name)}</span>
+          <p>${esc(d.band_gloss)}</p>
         </div>
-
-        ${d.zone_name && d.status === "fault" ? `
-        <div class="zone-line">
-          <span class="lbl">Зона</span>
-          <span class="val">${esc(d.zone_name)}</span>
-        </div>` : ""}
-
-        ${showVersions ? `<p class="sub">Возможные причины, по убыванию правдоподобия:</p>${versionsHtml}` : ""}
-
-        ${(d.next_steps || []).length ? `
-          <p class="sub" style="margin-top:16px">Что делать</p>
-          <ol class="steps-list">${d.next_steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
-
-        <p class="disclaimer">${esc(d.disclaimer)}
-        Полезного звука в записи: ${esc(d.clean_seconds)} сек.</p>
-
-        <details>
-          <summary>Технические данные</summary>
-          <pre>${esc(JSON.stringify(d.debug, null, 1))}</pre>
-        </details>
+        ${d.zone_name ? `<div class="kv"><span class="k">Зона</span><span class="v">${esc(d.zone_name)}</span></div>` : ""}
+        ${(d.next_steps || []).length ? `<p class="sub" style="margin-bottom:8px">Что делать</p>
+          <ul class="ulist">${d.next_steps.map(s => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
+        <p class="note">${esc(d.disclaimer)} Полезного звука: ${esc(d.clean_seconds)} сек.</p>
+        <details><summary>Технические данные</summary><pre>${esc(JSON.stringify(d.debug, null, 1))}</pre></details>
       </div>
-
+      <div id="mech-slot">${mechBlock}</div>
       <div class="card">
         <h2>Были в сервисе?</h2>
-        <p class="sub">Скажите, что нашли на самом деле. Это единственный способ
-        сделать модель точнее — и на вашей марке в том числе.</p>
+        <p class="sub">Скажите, что нашли на самом деле. Это единственный способ сделать модель точнее — в том числе на вашей марке.</p>
         <label for="actual">Что оказалось</label>
-        <input type="text" id="actual" placeholder="Направляющие клапанов" autocomplete="off">
-        <textarea id="fb-comment" placeholder="Комментарий (необязательно)"></textarea>
-        <button class="primary" id="fb-send">Отправить</button>
+        <input id="actual" placeholder="Направляющие клапанов" autocomplete="off">
+        <textarea id="fbc" placeholder="Комментарий (необязательно)"></textarea>
+        <button class="btn" id="fbsend">Отправить</button>
       </div>
-
-      <button class="ghost" onclick="location.reload()">Новая проверка</button>`;
+      <button class="btn sec" onclick="location.reload()">Проверить ещё раз</button>`;
 
     show("step-result");
-
-    $("fb-send").addEventListener("click", async () => {
+    $("fbsend").addEventListener("click", async () => {
       const fd = new FormData();
       fd.append("rec_id", d.id);
       fd.append("actual", $("actual").value);
-      fd.append("comment", $("fb-comment").value);
-      await fetch("/api/feedback", { method:"POST", body: fd });
-      $("fb-send").textContent = "Спасибо";
-      $("fb-send").disabled = true;
+      fd.append("comment", $("fbc").value);
+      await fetch("/api/feedback", { method:"POST", body:fd });
+      $("fbsend").textContent = "Спасибо";
+      $("fbsend").disabled = true;
     });
   }
 })();
