@@ -7,7 +7,8 @@ import pytest
 
 from service.memory_store import MemoryStore
 
-VEHICLE = {"brand": "Lada", "model": "Granta", "year": "2015", "mileage": "150000"}
+VEHICLE = {"brand": "Lada", "model": "Granta", "year": "2015", "mileage": "150000",
+          "engine_spec": "1.6, 8 клапанов"}
 FACTS = {"timing_drive": "ремень ГРМ", "confidence": "medium"}
 
 
@@ -37,6 +38,24 @@ def test_facts_upsert_overwrites(store):
     store.save_facts(key, VEHICLE, FACTS)
     store.save_facts(key, VEHICLE, {"timing_drive": "обновлено"})
     assert store.get_facts(key) == {"timing_drive": "обновлено"}
+
+
+def test_engine_spec_persists_in_corrections(store):
+    """Разные моторы одной модели дают разный привод ГРМ — эта колонка нужна,
+    чтобы потом можно было отличить один случай Granta от другого при разборе
+    качества обучающего корпуса."""
+    cid = store.save_correction(
+        rec_id="abc", vehicle_key="lada granta 2015 1.6, 8 клапанов",
+        vehicle=VEHICLE, symptom="цокот", ai_status="fault", ai_zone="Двигатель",
+        ai_top_part="valvetrain", owner_text="направляющие клапанов",
+        comment="", audio_path="/x.wav", consent_training=True,
+    )
+    import sqlite3
+    with sqlite3.connect(store.path) as conn:
+        conn.row_factory = sqlite3.Row
+        r = conn.execute("SELECT engine_spec FROM corrections WHERE id = ?",
+                         (cid,)).fetchone()
+    assert r["engine_spec"] == "1.6, 8 клапанов"
 
 
 def test_save_correction_returns_id(store):

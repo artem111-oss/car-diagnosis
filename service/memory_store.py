@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS vehicle_facts (
     brand TEXT,
     model TEXT,
     year TEXT,
+    engine_spec TEXT,
     facts_json TEXT NOT NULL,
     fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS corrections (
     model TEXT,
     year TEXT,
     mileage TEXT,
+    engine_spec TEXT,
     symptom TEXT,
     ai_status TEXT,
     ai_zone TEXT,
@@ -97,13 +99,15 @@ class MemoryStore:
             return
         with _lock, self._connect() as conn:
             conn.execute(
-                """INSERT INTO vehicle_facts (key, brand, model, year, facts_json, fetched_at)
-                   VALUES (?, ?, ?, ?, ?, datetime('now'))
+                """INSERT INTO vehicle_facts
+                   (key, brand, model, year, engine_spec, facts_json, fetched_at)
+                   VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
                    ON CONFLICT(key) DO UPDATE SET
                      facts_json = excluded.facts_json,
                      fetched_at = excluded.fetched_at""",
                 (key, vehicle.get("brand", ""), vehicle.get("model", ""),
-                 vehicle.get("year", ""), json.dumps(facts, ensure_ascii=False)),
+                 vehicle.get("year", ""), vehicle.get("engine_spec", ""),
+                 json.dumps(facts, ensure_ascii=False)),
             )
 
     # --- подтверждённые исправления ------------------------------------
@@ -117,14 +121,14 @@ class MemoryStore:
         with _lock, self._connect() as conn:
             cur = conn.execute(
                 """INSERT INTO corrections
-                   (rec_id, vehicle_key, brand, model, year, mileage, symptom,
-                    ai_status, ai_zone, ai_top_part, owner_text, comment,
+                   (rec_id, vehicle_key, brand, model, year, mileage, engine_spec,
+                    symptom, ai_status, ai_zone, ai_top_part, owner_text, comment,
                     audio_path, consent_training)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (rec_id, vehicle_key, vehicle.get("brand", ""), vehicle.get("model", ""),
-                 vehicle.get("year", ""), vehicle.get("mileage", ""), symptom,
-                 ai_status, ai_zone, ai_top_part, owner_text, comment,
-                 audio_path, int(consent_training)),
+                 vehicle.get("year", ""), vehicle.get("mileage", ""),
+                 vehicle.get("engine_spec", ""), symptom, ai_status, ai_zone,
+                 ai_top_part, owner_text, comment, audio_path, int(consent_training)),
             )
             return cur.lastrowid
 

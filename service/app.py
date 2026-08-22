@@ -153,6 +153,7 @@ async def analyse(
     model: str = Form(""),
     year: str = Form(""),
     mileage: str = Form(""),
+    engine_spec: str = Form(""),
     symptom: str = Form(""),
     consent_training: str = Form("false"),
 ):
@@ -167,8 +168,13 @@ async def analyse(
     corpus: Corpus = _state["corpus"]
     engine: Engine = _state["engine"]
     rec_id = corpus.new_id()
+    # engine_spec — то, что владелец знает о моторе ("1.6, 8 клапанов"), не
+    # путать с переменной engine выше (акустическая модель). На одну модель
+    # часто ставят разные моторы с разным приводом ГРМ — без этого уточнения
+    # справочник вынужден гадать между вариантами вместо точного ответа.
     vehicle = {"brand": brand.strip()[:40], "model": model.strip()[:40],
-               "year": year.strip()[:4], "mileage": mileage.strip()[:8]}
+               "year": year.strip()[:4], "mileage": mileage.strip()[:8],
+               "engine_spec": engine_spec.strip()[:80]}
     symptom = symptom.strip()[:500]
 
     t0 = time.perf_counter()
@@ -281,7 +287,8 @@ async def mechanic_refine(rec_id: str = Form(...), answers: str = Form(...)):
 
 @app.post("/api/prefetch")
 async def prefetch(background: BackgroundTasks, brand: str = Form(""),
-                   model: str = Form(""), year: str = Form("")):
+                   model: str = Form(""), year: str = Form(""),
+                   engine_spec: str = Form("")):
     """Прогреть справочник, пока пользователь читает инструкцию и пишет звук.
 
     Справка занимает около 15 секунд и нужна только к моменту разбора. Владелец
@@ -292,7 +299,7 @@ async def prefetch(background: BackgroundTasks, brand: str = Form(""),
     if not brand.strip():
         return {"ok": False}
     vehicle = {"brand": brand.strip()[:40], "model": model.strip()[:40],
-              "year": year.strip()[:4]}
+              "year": year.strip()[:4], "engine_spec": engine_spec.strip()[:80]}
     background.add_task(vehicle_facts.lookup_persistent, vehicle, _state["memory"])
     return {"ok": True}
 

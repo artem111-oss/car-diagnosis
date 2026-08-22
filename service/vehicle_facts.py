@@ -47,6 +47,13 @@ PROMPT = """Ты — справочник по устройству автомо
 
 Автомобиль: {vehicle}
 
+Если в описании указан конкретный двигатель (объём, число клапанов,
+атмосферный/турбо) — на модели часто ставят несколько разных моторов с разным
+приводом ГРМ и разным клапанным механизмом, поэтому отвечай именно про этот
+двигатель, а не про все варианты сразу. Если двигатель не указан и у модели
+несколько вариантов — так и напиши в timing_drive и hydraulic_lifters, не
+выбирай один вариант наугад.
+
 Ответь строго JSON:
 {{
  "engines": "какие двигатели ставились на эту модель в этом поколении, кратко",
@@ -60,8 +67,11 @@ PROMPT = """Ты — справочник по устройству автомо
 
 
 def _key(vehicle: dict) -> str:
+    # engine_spec входит в ключ: у одной модели бывает и ремень, и цепь на
+    # разных моторах (Granta 8V/16V — характерный пример), и справка для
+    # одного варианта не годится для другого.
     return " ".join(str(vehicle.get(k, "")).strip().lower()
-                    for k in ("brand", "model", "year")).strip()
+                    for k in ("brand", "model", "year", "engine_spec")).strip()
 
 
 def vehicle_key(vehicle: dict) -> str:
@@ -72,7 +82,9 @@ def vehicle_key(vehicle: dict) -> str:
 
 def _vehicle_line(vehicle: dict) -> str:
     bits = [vehicle.get("brand", ""), vehicle.get("model", ""), vehicle.get("year", "")]
-    return " ".join(b for b in bits if b).strip()
+    line = " ".join(b for b in bits if b).strip()
+    engine_spec = vehicle.get("engine_spec", "").strip()
+    return f"{line}, двигатель: {engine_spec}" if engine_spec else line
 
 
 def _parse(txt: str) -> dict:

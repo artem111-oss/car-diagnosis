@@ -434,6 +434,9 @@
         <div><label for="year">Год</label><input id="year" type="number" placeholder="2015" min="1950" max="2030"></div>
         <div><label for="mileage">Пробег, км</label><input id="mileage" type="number" placeholder="150000" min="0"></div>
       </div>
+      <label for="engine_spec">Двигатель, если знаете</label>
+      <input id="engine_spec" placeholder="1.6, 8 клапанов" autocomplete="off">
+      <p class="sub" style="margin:-8px 0 13px">На одну модель часто ставят разные моторы — с ремнём ГРМ или цепью, с гидрокомпенсаторами или без. Зная точный двигатель, механик не гадает между вариантами.</p>
       <button class="btn" data-next="step-symptom">Дальше</button>
     </section>
 
@@ -552,7 +555,7 @@
       // звук, запрос успевает отработать и перестаёт стоить ожидания.
       if (b.dataset.next === "step-symptom" && $("brand").value.trim()) {
         const fd = new FormData();
-        ["brand","model","year"].forEach(k => fd.append(k, $(k).value));
+        ["brand","model","year","engine_spec"].forEach(k => fd.append(k, $(k).value));
         fetch("/api/prefetch", { method:"POST", body:fd }).catch(() => {});
       }
       show(b.dataset.next);
@@ -666,7 +669,7 @@
 
     const fd = new FormData();
     fd.append("audio", state.blob, "rec.webm");
-    ["brand","model","year","mileage"].forEach(k => fd.append(k, $(k).value));
+    ["brand","model","year","mileage","engine_spec"].forEach(k => fd.append(k, $(k).value));
     fd.append("symptom", [state.symptom.join(", "), $("note").value].filter(Boolean).join(". "));
     fd.append("consent_training", "true");
 

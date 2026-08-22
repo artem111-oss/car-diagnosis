@@ -118,6 +118,9 @@ class MechanicOpinion:
 def _vehicle_line(v: dict) -> str:
     bits = [v.get("brand", ""), v.get("model", ""), v.get("year", "")]
     name = " ".join(b for b in bits if b).strip() or "марка не указана"
+    engine_spec = v.get("engine_spec", "").strip()
+    if engine_spec:
+        name += f", двигатель: {engine_spec}"
     km = v.get("mileage", "")
     return f"{name}, пробег {km} км" if km else name
 

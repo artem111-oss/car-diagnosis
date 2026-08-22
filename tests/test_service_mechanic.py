@@ -105,6 +105,12 @@ def test_vehicle_line_handles_missing_fields():
     assert "Lada" in mechanic._vehicle_line({"brand": "Lada"})
 
 
+def test_vehicle_line_carries_engine_spec_to_the_mechanic():
+    line = mechanic._vehicle_line({"brand": "Lada", "model": "Granta",
+                                   "engine_spec": "1.6, 8 клапанов"})
+    assert "1.6, 8 клапанов" in line
+
+
 def test_refine_keeps_the_conversation(monkeypatch):
     """Уточнение продолжает диалог, а не начинает новый: механик должен
     помнить, что уже предполагал, иначе вычёркивать будет нечего."""

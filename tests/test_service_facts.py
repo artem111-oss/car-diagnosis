@@ -52,6 +52,58 @@ def test_lookup_is_cached_by_vehicle(monkeypatch):
     assert len(calls) == 1, "разный регистр и пробелы — это та же машина"
 
 
+def test_different_engines_on_same_model_are_not_the_same_cache_entry(monkeypatch):
+    """Granta 8V и 16V — разный привод ГРМ и разный клапанной механизм на
+    одной модели. Без engine_spec в ключе вторая машина получила бы справку,
+    выуженную для первой."""
+    monkeypatch.setenv("AIMLAPI_KEY", "k")
+    calls = []
+
+    class Resp:
+        status_code = 200
+
+        def __init__(self, engine):
+            self.engine = engine
+
+        def json(self):
+            calls.append(self.engine)
+            return {"choices": [{"message": {"content": '{"timing_drive":"x"}'}}]}
+
+    def fake_post(url, *, json, **kw):
+        return Resp(json["messages"][0]["content"])
+
+    monkeypatch.setattr(vehicle_facts.httpx, "post", fake_post)
+
+    vehicle_facts.lookup({"brand": "Lada", "model": "Granta", "year": "2015",
+                          "engine_spec": "1.6, 8 клапанов"})
+    vehicle_facts.lookup({"brand": "Lada", "model": "Granta", "year": "2015",
+                          "engine_spec": "1.6, 16 клапанов"})
+    vehicle_facts.lookup({"brand": "Lada", "model": "Granta", "year": "2015"})
+
+    assert len(calls) == 3, "разный двигатель — разный запрос, разная запись в кэше"
+
+
+def test_engine_spec_reaches_the_sonar_prompt(monkeypatch):
+    monkeypatch.setenv("AIMLAPI_KEY", "k")
+    seen = {}
+
+    def fake_post(url, *, json, **kw):
+        seen["content"] = json["messages"][0]["content"]
+
+        class R:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"choices": [{"message": {"content": "{}"}}]}
+        return R()
+
+    monkeypatch.setattr(vehicle_facts.httpx, "post", fake_post)
+    vehicle_facts.lookup({"brand": "Lada", "model": "Granta", "year": "2015",
+                          "engine_spec": "1.6, 8 клапанов"})
+    assert "1.6, 8 клапанов" in seen["content"]
+
+
 def test_lookup_without_brand_skips_the_call(monkeypatch):
     monkeypatch.setenv("AIMLAPI_KEY", "k")
 
