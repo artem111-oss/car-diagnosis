@@ -489,11 +489,23 @@
   const STEPS = ["step-car","step-symptom","step-record","step-loading","step-result"];
   const PROGRESS = { "step-car":1, "step-symptom":2, "step-record":3, "step-loading":4, "step-result":4 };
 
+  // Сайт — одностраничное приложение: лендинг и мастер переключаются через
+  // classList, без переходов по URL. Метрика без подсказки видит один хит на
+  // весь визит и не узнает, дошёл ли человек до записи звука или до
+  // результата. hit() шлёт виртуальный просмотр на каждый значимый шаг —
+  // именно то, что отличает переход из поиска от реального использования.
+  function hit(path, title){
+    if (typeof window.ym === "function") {
+      window.ym(111860603, "hit", location.origin + path, { title, referer: location.href });
+    }
+  }
+
   function show(id){
     STEPS.forEach(s => $(s).classList.toggle("hidden", s !== id));
     const n = PROGRESS[id];
     [1,2,3,4].forEach(i => $("s"+i).classList.toggle("on", i <= n));
     window.scrollTo({ top:0, behavior:"smooth" });
+    hit("/wizard/" + id, "Что стучит — " + id);
   }
 
   document.querySelectorAll("[data-go=wiz]").forEach(b => b.addEventListener("click", () => {
@@ -511,6 +523,7 @@
     $("wiz").classList.add("hidden");
     $("landing").classList.remove("hidden");
     window.scrollTo({ top: 0, behavior: "smooth" });
+    hit("/", "Что стучит");
   });
   document.querySelectorAll("[data-next]").forEach(b =>
     b.addEventListener("click", () => {
