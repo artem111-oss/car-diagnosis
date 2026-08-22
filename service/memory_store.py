@@ -62,6 +62,16 @@ CREATE TABLE IF NOT EXISTS corrections (
 
 CREATE INDEX IF NOT EXISTS idx_corrections_export
     ON corrections (consent_training, mapped_label, exported_at);
+
+CREATE TABLE IF NOT EXISTS partners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    city TEXT,
+    contact TEXT NOT NULL,
+    note TEXT,
+    approved INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 # sqlite3.Connection нельзя расшаривать между потоками без serialize — проще
@@ -159,6 +169,30 @@ class MemoryStore:
                 "UPDATE corrections SET exported_at = datetime('now') WHERE id = ?",
                 [(i,) for i in ids])
 
+    # --- партнёрские СТО ------------------------------------------------
+
+    def add_partner(self, *, name: str, city: str, contact: str, note: str) -> int:
+        """Заявка от СТО. Появляется на публичной странице только после
+        approve_partner — бейдж должен что-то значить, а не выдаваться всем,
+        кто заполнил форму."""
+        with _lock, self._connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO partners (name, city, contact, note) VALUES (?, ?, ?, ?)",
+                (name, city, contact, note))
+            return cur.lastrowid
+
+    def approve_partner(self, partner_id: int) -> None:
+        with _lock, self._connect() as conn:
+            conn.execute("UPDATE partners SET approved = 1 WHERE id = ?", (partner_id,))
+
+    def list_partners(self, *, approved_only: bool = True) -> list[dict]:
+        q = "SELECT * FROM partners"
+        if approved_only:
+            q += " WHERE approved = 1"
+        q += " ORDER BY created_at DESC"
+        with _lock, self._connect() as conn:
+            return [dict(r) for r in conn.execute(q).fetchall()]
+
     def stats(self) -> dict:
         with _lock, self._connect() as conn:
             total = conn.execute("SELECT COUNT(*) c FROM corrections").fetchone()["c"]
@@ -178,6 +212,10 @@ class MemoryStore:
                 "ORDER BY c DESC").fetchall()
             facts_cached = conn.execute(
                 "SELECT COUNT(*) c FROM vehicle_facts").fetchone()["c"]
+            partners_pending = conn.execute(
+                "SELECT COUNT(*) c FROM partners WHERE approved = 0").fetchone()["c"]
+            partners_approved = conn.execute(
+                "SELECT COUNT(*) c FROM partners WHERE approved = 1").fetchone()["c"]
         return {
             "corrections_total": total,
             "corrections_mapped": mapped,
@@ -185,4 +223,6 @@ class MemoryStore:
             "already_exported": exported,
             "by_label": {r["mapped_label"]: r["c"] for r in by_label},
             "vehicle_facts_cached": facts_cached,
+            "partners_pending": partners_pending,
+            "partners_approved": partners_approved,
         }

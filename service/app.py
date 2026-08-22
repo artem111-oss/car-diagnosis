@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from service import label_mapper, mechanic, seo_pages, vehicle_facts
+from service import indexnow, label_mapper, mechanic, seo_pages, vehicle_facts
 from service.diagnose import Engine
 from service.memory_store import MemoryStore
 from service.storage import Corpus
@@ -87,6 +87,12 @@ async def lifespan(app: FastAPI):
     _warmup(_state["engine"])
     if not mechanic.api_key():
         log.warning("AIMLAPI_KEY не задан — разбор механиком будет отключён")
+    # IndexNow: сообщить о всех страницах при каждом старте. Идемпотентно и
+    # дёшево — если ничего не изменилось, поисковик просто ничего не найдёт
+    # нового; зато новая страница не ждёт планового обхода.
+    if not os.getenv("DISABLE_INDEXNOW"):
+        asyncio.get_event_loop().run_in_executor(
+            None, indexnow.submit, "chtostuchit.ru", seo_pages.all_paths())
     yield
     _state.clear()
 
@@ -153,12 +159,18 @@ async def robots():
 
 @app.get("/sitemap.xml")
 async def sitemap():
-    pages = ["/", "/statistika"] + list(seo_pages.PAGES)
-    urls = "".join(f"<url><loc>https://chtostuchit.ru{p}</loc></url>" for p in pages)
+    urls = "".join(f"<url><loc>https://chtostuchit.ru{p}</loc></url>" for p in seo_pages.all_paths())
     return Response(
         f'<?xml version="1.0" encoding="UTF-8"?>'
         f'<urlset xmlns="http://www.sitemap.org/schemas/sitemap/0.9">{urls}</urlset>',
         media_type="application/xml")
+
+
+@app.get(f"/{indexnow.KEY}.txt")
+async def indexnow_key():
+    """Файл-подтверждение владения доменом для IndexNow. Ключ фиксированный —
+    см. service/indexnow.py."""
+    return PlainTextResponse(indexnow.KEY)
 
 
 @app.get("/statistika")
@@ -168,6 +180,32 @@ async def statistika():
     s = _state["corpus"].stats()
     m = _state["memory"].stats()
     return HTMLResponse(seo_pages.stats_page(s, m))
+
+
+@app.get("/partnyorstvo")
+async def partner_landing():
+    return HTMLResponse(seo_pages.partner_page())
+
+
+@app.post("/api/partners")
+async def submit_partner(name: str = Form(...), city: str = Form(...),
+                         contact: str = Form(...), note: str = Form("")):
+    """Заявка от СТО. Не появляется публично, пока не одобрена — бейдж
+    выдаётся после реального контакта, а не автоматически по факту формы."""
+    if not name.strip() or not city.strip() or not contact.strip():
+        raise HTTPException(400, "Заполните название, город и контакт.")
+    _state["memory"].add_partner(
+        name=name.strip()[:120], city=city.strip()[:60],
+        contact=contact.strip()[:120], note=note.strip()[:500])
+    return {"ok": True}
+
+
+@app.get("/api/partners")
+async def list_partners():
+    """Одобренные партнёры — для бейджей на главной. Без approved=1 внутри
+    memory_store список пуст, что и есть корректное поведение до первого
+    реального рукопожатия."""
+    return {"partners": _state["memory"].list_partners(approved_only=True)}
 
 
 @app.post("/api/analyse")
