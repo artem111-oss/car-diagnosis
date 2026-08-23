@@ -37,14 +37,11 @@ p.lede{font-size:18px;color:var(--ink)}
 .faq div{margin-bottom:16px}
 .answer{background:var(--card2);border:1px solid var(--amber);border-left:3px solid var(--amber);
   border-radius:0 10px 10px 0;padding:14px 17px;margin:16px 0;font-size:16px;color:var(--ink)}
-.updated{color:var(--ink3);font-size:12.5px;margin:-8px 0 18px}
 footer{color:var(--ink3);font-size:13px;text-align:center;padding-top:20px;border-top:1px solid var(--line);margin-top:30px}
 """
 
-# Дата последнего пересмотра фактов. Две формы: ISO для schema.org
-# (dateModified должен парситься валидаторами), человекочитаемая — в тексте.
+# Дата последнего пересмотра фактов, ISO 8601 — для schema.org dateModified.
 UPDATED_ISO = "2026-08-23"
-UPDATED = "23 августа 2026"
 
 
 def _shell(*, path: str, title: str, description: str, h1: str, direct_answer: str = "",
@@ -69,7 +66,9 @@ def _shell(*, path: str, title: str, description: str, h1: str, direct_answer: s
         })
     ld_html = "".join(f'<script type="application/ld+json">{json.dumps(s, ensure_ascii=False)}</script>'
                       for s in scripts)
-    faq_html = "".join(f'<div class="faq"><b>{q}</b><span>{a}</span></div>' for q, a in faq)
+    faq_html = ('<h2>Частые вопросы</h2>' +
+                "".join(f'<div class="faq"><b>{q}</b><span>{a}</span></div>' for q, a in faq)
+                if faq else "")
     answer_html = f'<div class="answer">{direct_answer}</div>' if direct_answer else ""
     lede_html = f'<p class="lede">{lede}</p>' if lede else ""
     return f"""<!doctype html>
@@ -87,11 +86,9 @@ def _shell(*, path: str, title: str, description: str, h1: str, direct_answer: s
 <a href="/">{BRAND}</a></div></header>
 <div class="wrap">
 <h1>{h1}</h1>
-<p class="updated">Обновлено: {UPDATED}</p>
 {answer_html}
 {lede_html}
 {body}
-<h2>Частые вопросы</h2>
 {faq_html}
 <a class="cta" href="/">Записать звук и проверить бесплатно →</a>
 <footer>{BRAND} — предварительная подсказка по звуку, не заменяет осмотр специалиста.</footer>

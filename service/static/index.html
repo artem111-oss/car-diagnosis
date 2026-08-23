@@ -752,6 +752,17 @@
   }
 
   /* ---------- результат ---------- */
+  function formatCost(cost){
+    // Модель иногда пишет "5000-12000 (замена цепи...) ₽" — переносим ₽
+    // сразу после числового диапазона: "5000-12000₽ (замена цепи...)".
+    const s = String(cost).trim();
+    const m = s.match(/^([\d\s]+[-–][\d\s]+)\s*(.*)$/);
+    if (!m) return /[₽Pp]/.test(s) ? s : `${s} ₽`;
+    const range = m[1].trim();
+    const rest = m[2].replace(/^₽\s*/, "").trim();
+    return rest ? `${range}₽ ${rest}` : `${range}₽`;
+  }
+
   function mechanicHtml(m){
     const parts = (m.parts || []).map(p => `
       <div class="part">
@@ -762,7 +773,7 @@
         ${p.why ? `<p>${esc(p.why)}</p>` : ""}
         <div class="meta">
           ${p.check ? `<span><b>Проверить:</b> ${esc(p.check)}</span>` : ""}
-          ${p.cost_rub ? `<span class="price">${esc(p.cost_rub)} ₽</span>` : ""}
+          ${p.cost_rub ? `<span class="price">${esc(formatCost(p.cost_rub))}</span>` : ""}
         </div>
       </div>`).join("");
 
@@ -864,7 +875,7 @@
       </div>
       <button class="btn sec" id="share-btn" style="margin-bottom:14px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:7px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
-        Отправить другу со стуком
+        Поделиться результатом диагностики
       </button>
       <div id="mech-slot">${mechBlock}</div>
       <div class="card">
@@ -883,7 +894,8 @@
     // на голый сайт, а конкретным результатом: у друга та же проблема,
     // готовый пример убеждает лучше, чем объяснение с нуля.
     $("share-btn").addEventListener("click", async () => {
-      const text = `${d.headline}. Я проверил на chtostuchit.ru — бесплатно определяет, что стучит в машине, по записи звука. Проверь свою: `;
+      const zoneBit = d.zone_name ? ` Зона: ${d.zone_name}.` : "";
+      const text = `Мой результат на chtostuchit.ru: ${d.headline}.${zoneBit} Бесплатно определяет, что стучит в машине, по записи звука. Проверь свою: `;
       const url = location.origin;
       try {
         if (navigator.share) {
